@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Rekap {{ target_employee.PIN }}{% endblock %}
+{% block page_title %}Rekap Kehadiran Karyawan{% endblock %}
+{% block content %}
+<div class="mb-4">
+  <a href="{% url 'iclock:attendance_recap' %}" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
+    &larr; Kembali ke Attendance Recap
+  </a>
+</div>
+
+<div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 overflow-hidden">
+  <!-- Header: selalu tampil (setara "sticky"), tidak ikut scroll -->
+  <div class="p-4 border-b dark:border-slate-700 bg-white dark:bg-slate-800">
+    <div class="flex items-center justify-between flex-wrap gap-3">
+      <div>
+        <div class="font-semibold text-slate-800 dark:text-slate-100">
+          NIP: {{ target_employee.PIN }} - {{ target_employee.EName|default:"-" }}
+        </div>
+        <div class="text-sm text-slate-500 dark:text-slate-400">Periode: {{ month_label }}</div>
+      </div>
+      <div class="flex items-center gap-2">
+        <a href="?year={{ prev_year }}&month={{ prev_month }}"
+           class="px-3 py-1.5 rounded-lg border dark:border-slate-600 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm">&lsaquo; Prev</a>
+        <a href="?year={{ next_year }}&month={{ next_month }}"
+           class="px-3 py-1.5 rounded-lg border dark:border-slate-600 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm">Next &rsaquo;</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Konten: scrollable, header kolom sticky di dalam area scroll -->
+  <div class="overflow-y-auto" style="max-height: 65vh;">
+    <table class="w-full text-xs">
+      <thead class="bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 text-left sticky top-0 z-10">
+        <tr>
+          <th class="px-3 py-1 whitespace-nowrap">Tanggal</th>
+          <th class="px-3 py-1 whitespace-nowrap">Device</th>
+          <th class="px-3 py-1 whitespace-nowrap">JAM</th>
+          <th class="px-3 py-1 whitespace-nowrap">Type</th>
+        </tr>
+      </thead>
+      <tbody class="font-mono">
+        {% for row in rows %}
+        <tr class="border-t dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/40">
+          <td class="px-3 py-1 whitespace-nowrap">{% if row.date %}{{ row.date|date:"Y/m/d" }}{% endif %}</td>
+          <td class="px-3 py-1 whitespace-nowrap font-sans">{{ row.device }}</td>
+          <td class="px-3 py-1 whitespace-nowrap">{{ row.time|date:"H:i" }}</td>
+          <td class="px-4 py-1.5 whitespace-nowrap font-sans
+                     {% if row.type_label == 'C/In' %}text-emerald-700{% else %}text-rose-700{% endif %}">
+            {{ row.type_label }}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" class="px-4 py-10 text-center text-slate-400 dark:text-slate-500 font-sans">Tidak ada transaksi di periode ini</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

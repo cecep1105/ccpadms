@@ -1,0 +1,331 @@
+{% extends "base.html" %}
+{% block title %}Active Device{% endblock %}
+{% block page_title %}Active Device{% endblock %}
+{% block content %}
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+  <form method="get" class="flex flex-wrap items-center gap-2">
+    <input type="text" name="q" value="{{ search }}" placeholder="Cari SN / alias..."
+           class="px-3 py-2 border dark:border-slate-600 rounded-lg text-sm w-full sm:w-72 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none">
+    <input type="hidden" name="sort" value="{{ sort }}">
+    <input type="hidden" name="dir" value="{{ dir }}">
+    <button class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-sm shrink-0">Cari</button>
+    <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 shrink-0">
+      Baris/halaman:
+      <select name="page_size" onchange="this.form.submit()"
+              class="px-2 py-1.5 border dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none">
+        {% for opt in page_size_options %}
+          <option value="{{ opt }}" {% if opt == page_size %}selected{% endif %}>{{ opt }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 shrink-0 cursor-pointer">
+      <input type="checkbox" id="wsConsoleToggle"
+             class="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-indigo-600 focus:ring-indigo-500">
+      🖥️ Tampilkan Console
+    </label>
+  </form>
+  <a href="{% url 'iclock:active_device_add' %}"
+     class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium text-center shrink-0">
+    + Tambah Active Device
+  </a>
+</div>
+
+<div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 overflow-x-auto">
+  <table class="w-full text-xs">
+    <thead class="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 text-left select-none">
+      <tr>
+        <th class="px-3 py-1">
+          <a href="{{ sort_urls.sn }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
+            Serial Number {% if sort == 'sn' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+          </a>
+        </th>
+        <th class="px-3 py-1">
+          <a href="{{ sort_urls.alias }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
+            Alias {% if sort == 'alias' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+          </a>
+        </th>
+        <th class="px-3 py-1">
+          <a href="{{ sort_urls.pool }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
+            Pool {% if sort == 'pool' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+          </a>
+        </th>
+        <th class="px-3 py-1">
+          <a href="{{ sort_urls.ip }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
+            IP Address {% if sort == 'ip' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+          </a>
+        </th>
+        <th class="px-3 py-1">
+          <a href="{{ sort_urls.last_activity }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
+            Last Activity {% if sort == 'last_activity' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+          </a>
+        </th>
+        <th class="px-3 py-1" title="Waktu transaksi/absensi terakhir dari device ini (beda dari Last Activity yang cuma heartbeat)">
+          Last Data
+        </th>
+        <th class="px-3 py-1 text-right">Aksi</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in page_obj %}
+      <tr class="border-t dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/40" data-device-row data-sn="{{ d.SN }}">
+        <td class="px-3 py-1 font-medium">{{ d.SN }}</td>
+        <td class="px-3 py-1">{{ d.Alias|default:"-" }}</td>
+        <td class="px-3 py-1">{{ d.DeptID|default:"-" }}</td>
+        <td class="px-3 py-1">{{ d.IPAddress|default:"-" }}</td>
+        <td class="px-3 py-1 ws-last-activity {% if d.is_stale %}text-rose-600 dark:text-rose-400 font-medium{% else %}text-slate-500 dark:text-slate-400{% endif %}"
+            data-ts="{% if d.LastActivity %}{{ d.LastActivity|date:'U' }}000{% endif %}">{{ d.LastActivity|date:"d M Y H:i"|default:"-" }}</td>
+        <td class="px-3 py-1 ws-last-data {% if d.is_lastdata_stale %}text-rose-600 dark:text-rose-400 font-medium{% else %}text-slate-500 dark:text-slate-400{% endif %}"
+            data-ts="{% if d.last_data_value %}{{ d.last_data_value|date:'U' }}000{% endif %}">{{ d.last_data_value|date:"d M Y H:i"|default:"-" }}</td>
+        <td class="px-3 py-1 text-right">
+          <details class="row-action-details relative inline-block text-left">
+            <summary class="row-action-toggle-native px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-xs font-medium inline-flex items-center gap-1">
+              Aksi <span class="text-[10px]">▾</span>
+            </summary>
+            <div class="row-action-menu-native absolute right-0 mt-1 w-52 bg-white dark:bg-slate-800 rounded-lg shadow-lg border dark:border-slate-700 py-1 z-30">
+              <a href="{% url 'iclock:active_device_edit' d.SN %}"
+                 class="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+                ✏️ Edit
+              </a>
+              <a href="{% url 'iclock:active_device_show_users' d.SN %}"
+                 class="show-loading-on-click flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+                👥 Show Device User
+              </a>
+              <a href="{% url 'iclock:active_device_backup_fingerprints' d.SN %}"
+                 class="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+                💾 Backup Data Finger
+              </a>
+              <a href="{% url 'iclock:active_device_set_network_params' d.SN %}"
+                 class="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+                🌐 Set Network Param
+              </a>
+              <a href="{% url 'iclock:active_device_generic_param' d.SN %}"
+                 class="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+                🧪 Get/Set Param (Testing)
+              </a>
+              <div class="border-t dark:border-slate-700 my-1"></div>
+              <form action="{% url 'iclock:active_device_sync_time' d.SN %}" method="post"
+                    onsubmit="return confirm('Sinkronkan jam device {{ d.SN }} dengan jam komputer/server ini sekarang?');">
+                {% csrf_token %}
+                <button type="submit" class="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+                  🕐 Update Time
+                </button>
+              </form>
+              <form action="{% url 'iclock:active_device_reboot' d.SN %}" method="post"
+                    onsubmit="return confirm('REBOOT device {{ d.SN }} sekarang? Device akan sempat offline beberapa puluh detik sampai selesai boot ulang.');">
+                {% csrf_token %}
+                <button type="submit" class="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40">
+                  🔄 REBOOT
+                </button>
+              </form>
+              <div class="border-t dark:border-slate-700 my-1"></div>
+              <form action="{% url 'iclock:active_device_delete' d.SN %}" method="post"
+                    onsubmit="return confirm('Hapus device {{ d.SN }} secara permanen?');">
+                {% csrf_token %}
+                <button type="submit" class="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40">
+                  🗑️ Hapus
+                </button>
+              </form>
+            </div>
+          </details>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="7" class="px-5 py-8 text-center text-slate-400 dark:text-slate-500">Belum ada active device</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% include "partials/pagination.html" %}
+
+<!-- Console window WebSocket -- diisi realtime pesan dari /ws/iclock (lihat
+     iclock/consumers.py & iclock/ws_utils.py::wsinfo()). Show/hide lewat
+     checkbox "Tampilkan Console" di toolbar atas. Koneksi WS tetap jalan di
+     background walau panel-nya disembunyikan, jadi pesan tidak ada yang
+     kelewat kalau ditampilkan lagi belakangan. -->
+<div id="wsConsolePanel" class="hidden mt-4 bg-slate-900 dark:bg-black rounded-xl border dark:border-slate-700 overflow-hidden">
+  <div class="px-4 py-2 bg-slate-800 dark:bg-slate-900 border-b dark:border-slate-700 flex items-center justify-between">
+    <span class="text-slate-300 text-sm font-medium">🖥️ WebSocket Console (/ws/iclock)</span>
+    <div class="flex items-center gap-2">
+      <span id="wsConnStatus" class="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-300">Menghubungkan...</span>
+      <button type="button" id="wsConsoleClearBtn" class="text-xs text-slate-400 hover:text-white px-2 py-0.5 rounded hover:bg-slate-700">Clear</button>
+    </div>
+  </div>
+  <div id="wsConsoleLog" class="p-3 h-56 overflow-y-auto font-mono text-xs text-emerald-400 space-y-0.5"></div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const consolePanel = document.getElementById('wsConsolePanel');
+  const consoleToggle = document.getElementById('wsConsoleToggle');
+  const consoleLog = document.getElementById('wsConsoleLog');
+  const connStatus = document.getElementById('wsConnStatus');
+  const clearBtn = document.getElementById('wsConsoleClearBtn');
+
+  if (consoleToggle && consolePanel) {
+    consoleToggle.addEventListener('change', () => {
+      consolePanel.classList.toggle('hidden', !consoleToggle.checked);
+    });
+  }
+  if (clearBtn && consoleLog) {
+    clearBtn.addEventListener('click', () => { consoleLog.innerHTML = ''; });
+  }
+
+  function setStatus(text, colorClass) {
+    if (!connStatus) return;
+    connStatus.textContent = text;
+    connStatus.className = 'text-xs px-2 py-0.5 rounded-full ' + colorClass;
+  }
+
+  function appendLine(section, message) {
+    if (!consoleLog) return;
+    const now = new Date().toLocaleTimeString('id-ID');
+    const line = document.createElement('div');
+    line.textContent = `[${now}] (${section}) ${JSON.stringify(message)}`;
+    consoleLog.appendChild(line);
+    // Batasi jumlah baris supaya tidak makan memori tak terbatas kalau
+    // dibiarkan terbuka lama.
+    while (consoleLog.children.length > 500) {
+      consoleLog.removeChild(consoleLog.firstChild);
+    }
+    consoleLog.scrollTop = consoleLog.scrollHeight;
+  }
+
+  // Format 'YYYY-MM-DD HH:MM:SS' (format field 'la' dari message) jadi mirip
+  // tampilan server-side Django ('d M Y H:i', mis. '14 Jul 2026 09:57').
+  // Kalau gagal parse, tampilkan apa adanya sebagai fallback.
+  function formatLastActivity(laStr) {
+    if (!laStr) return '-';
+    const parsed = new Date(String(laStr).replace(' ', 'T'));
+    if (isNaN(parsed.getTime())) return laStr;
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    const dd = String(parsed.getDate()).padStart(2, '0');
+    const hh = String(parsed.getHours()).padStart(2, '0');
+    const mm = String(parsed.getMinutes()).padStart(2, '0');
+    return `${dd} ${months[parsed.getMonth()]} ${parsed.getFullYear()} ${hh}:${mm}`;
+  }
+
+  // Ambang batas "device dianggap tidak aktif" -- HARUS konsisten dengan
+  // ACTIVE_DEVICE_STALE_MINUTES / ACTIVE_DEVICE_LASTDATA_STALE_MINUTES di
+  // iclock/views.py (render awal server pakai nilai yang sama, dikirim
+  // lewat context 'stale_minutes' / 'lastdata_stale_minutes').
+  const STALE_MS = {{ stale_minutes|default:60 }} * 60 * 1000;
+  const LASTDATA_STALE_MS = {{ lastdata_stale_minutes|default:60 }} * 60 * 1000;
+
+  // Toggle warna merah di suatu cell berdasarkan selisih waktu sekarang vs
+  // `tsMs` (epoch ms) dan `thresholdMs` yang dipakai. `tsMs` null/0 (belum
+  // pernah ada data) DIANGGAP stale juga. Dipakai bareng utk kolom Last
+  // Activity maupun Last Data (threshold beda-beda, logic sama).
+  function applyStaleStyling(cell, tsMs, thresholdMs) {
+    if (!cell) return;
+    const isStale = !tsMs || (Date.now() - tsMs >= thresholdMs);
+    cell.classList.toggle('text-rose-600', isStale);
+    cell.classList.toggle('dark:text-rose-400', isStale);
+    cell.classList.toggle('font-medium', isStale);
+    cell.classList.toggle('text-slate-500', !isStale);
+    cell.classList.toggle('dark:text-slate-400', !isStale);
+  }
+
+  // Cek ulang SEMUA baris secara berkala -- supaya device yang "diam" (tidak
+  // ada event WS baru sama sekali) tetap ikut berubah jadi merah seiring
+  // waktu berjalan, bukan cuma saat ada update dari WebSocket.
+  function recheckAllStale() {
+    document.querySelectorAll('.ws-last-activity').forEach((cell) => {
+      const tsMs = parseInt(cell.dataset.ts, 10) || 0;
+      applyStaleStyling(cell, tsMs || null, STALE_MS);
+    });
+    document.querySelectorAll('.ws-last-data').forEach((cell) => {
+      const tsMs = parseInt(cell.dataset.ts, 10) || 0;
+      applyStaleStyling(cell, tsMs || null, LASTDATA_STALE_MS);
+    });
+  }
+  recheckAllStale();
+  setInterval(recheckAllStale, 60000);
+
+  // PENTING: ini CUMA update tampilan (DOM), TIDAK ada request ke server/DB
+  // sama sekali -- database sudah otomatis ter-update oleh protokol push
+  // device yang terpisah. Ini murni supaya tabelnya terasa real-time tanpa
+  // perlu refresh halaman.
+  //
+  // CATATAN PERBAIKAN: sebelumnya cari baris pakai CSS.escape() di dalam
+  // selector CSS -- ternyata ini bisa gagal/tidak tersedia di sejumlah
+  // environment browser (terutama browser/mode lawas), bikin seluruh fungsi
+  // ini diam-diam gagal total (exception di baris pertama, sebelum sempat
+  // update apapun). Diganti jadi loop manual + bandingkan dataset.sn
+  // langsung -- tidak butuh CSS.escape maupun query selector dinamis sama
+  // sekali, jauh lebih kompatibel di berbagai browser.
+  function findDeviceRow(sn) {
+    const target = String(sn);
+    let found = null;
+    document.querySelectorAll('tr[data-device-row]').forEach((row) => {
+      if (row.dataset.sn === target) found = row;
+    });
+    return found;
+  }
+
+  // Helper umum: update 1 cell timestamp (teks + data-ts + styling stale)
+  // di baris device yang cocok `sn` -- dipakai bareng oleh Last Activity
+  // (section 'device_request') maupun Last Data (section 'device_attlog').
+  function updateDeviceRowTimestampCell(sn, la, cellSelector, thresholdMs) {
+    if (!sn) return;
+    const row = findDeviceRow(sn);
+    if (!row) return; // device ini tidak ada di halaman/hasil filter saat ini -- diamkan saja
+    const cell = row.querySelector(cellSelector);
+    if (!cell) return;
+    cell.textContent = formatLastActivity(la);
+    const parsed = new Date(String(la).replace(' ', 'T'));
+    const tsMs = isNaN(parsed.getTime()) ? null : parsed.getTime();
+    cell.dataset.ts = tsMs || '';
+    applyStaleStyling(cell, tsMs, thresholdMs);
+  }
+
+  function updateDeviceRowLastActivity(sn, la) {
+    updateDeviceRowTimestampCell(sn, la, '.ws-last-activity', STALE_MS);
+  }
+
+  // Event 'device_attlog' (ada transaksi/absensi baru dari device) --
+  // langsung update kolom Last Data pakai field 'la' di message yang sama
+  // (bukan query ulang ke database/API, murni tampilan real-time).
+  function updateDeviceRowLastData(sn, la) {
+    updateDeviceRowTimestampCell(sn, la, '.ws-last-data', LASTDATA_STALE_MS);
+  }
+
+  if (consoleLog) {
+    const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+    let ws;
+    try {
+      ws = new WebSocket(protocol + window.location.host + '/ws/iclock');
+    } catch (e) {
+      setStatus('Gagal', 'bg-rose-700 text-rose-100');
+      appendLine('error', 'Gagal membuat koneksi WebSocket: ' + e);
+      ws = null;
+    }
+
+    if (ws) {
+      ws.onopen = () => setStatus('Terhubung', 'bg-emerald-700 text-emerald-100');
+      ws.onclose = () => setStatus('Terputus', 'bg-rose-700 text-rose-100');
+      ws.onerror = () => setStatus('Error', 'bg-rose-700 text-rose-100');
+      ws.onmessage = (evt) => {
+        let data;
+        try {
+          data = JSON.parse(evt.data);
+        } catch (e) {
+          appendLine('?', evt.data);
+          return;
+        }
+        appendLine(data.section, data.message);
+
+        // Format message: {"sn": "...", "la": "YYYY-MM-DD HH:MM:SS", "devinfo": "..."}
+        if (data.message) {
+          if (data.section === 'device_request') {
+            updateDeviceRowLastActivity(data.message.sn, data.message.la);
+          } else if (data.section === 'device_attlog') {
+            updateDeviceRowLastData(data.message.sn, data.message.la);
+          }
+        }
+      };
+    }
+  }
+});
+</script>
+{% endblock %}

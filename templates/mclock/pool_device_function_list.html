@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Pool Device Function{% endblock %}
+{% block page_title %}Mobile Attendance — Pool Device Function{% endblock %}
+{% block content %}
+<div class="mb-4">
+  <a href="{% url 'mclock:mobile_attendance_home' %}" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
+    &larr; Kembali ke Mobile Attendance
+  </a>
+</div>
+
+<p class="text-xs text-slate-400 dark:text-slate-500 mb-4">
+  Mapping PoolID → KANTIN / Bukan KANTIN — dipakai menentukan kode fungsi (<code>settings.DEVICEFUNCTION</code>)
+  tiap check-in/out/meal (dicek PERTAMA sebelum fallback ke prefix PIN). <strong>Dikelola manual
+  sepenuhnya</strong> di sini — BEDA dengan Mobile Pool/Mobile Pool Location yang disinkronkan dari MSSQL.
+</p>
+
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+  <form method="get" class="flex flex-wrap items-center gap-2">
+    <input type="text" name="q" value="{{ search }}" placeholder="Cari PoolID..."
+           class="px-3 py-2 border dark:border-slate-600 rounded-lg text-sm w-full sm:w-72 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none">
+    <input type="hidden" name="sort" value="{{ sort }}">
+    <input type="hidden" name="dir" value="{{ dir }}">
+    <button class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-sm shrink-0">Cari</button>
+    {% if search %}
+    <a href="{% url 'mclock:pool_device_function_list' %}" class="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg text-sm text-center shrink-0">Reset</a>
+    {% endif %}
+    <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 shrink-0">
+      Baris/halaman:
+      <select name="page_size" onchange="this.form.submit()"
+              class="px-2 py-1.5 border dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none">
+        {% for opt in page_size_options %}
+          <option value="{{ opt }}" {% if opt == page_size %}selected{% endif %}>{{ opt }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </form>
+  <a href="{% url 'mclock:pool_device_function_add' %}"
+     class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium text-center shrink-0">
+    + Tambah Mapping
+  </a>
+</div>
+
+<div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 overflow-x-auto">
+  <table class="w-full text-xs">
+    <thead class="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 text-left select-none">
+      <tr>
+        <th class="px-3 py-1">No</th>
+        <th class="px-3 py-1">
+          <a href="{{ sort_urls.PoolID }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
+            PoolID {% if sort == 'PoolID' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+          </a>
+        </th>
+        <th class="px-3 py-1">
+          <a href="{{ sort_urls.function_type }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
+            Function Type {% if sort == 'function_type' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+          </a>
+        </th>
+        <th class="px-3 py-1">
+          <a href="{{ sort_urls.updated_at }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
+            Diperbarui {% if sort == 'updated_at' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+          </a>
+        </th>
+        <th class="px-3 py-1 text-right">Aksi</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for obj in page_obj %}
+      <tr class="border-t dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/40">
+        <td class="px-3 py-1">{{ page_obj.start_index|add:forloop.counter0 }}</td>
+        <td class="px-3 py-1 font-medium">
+          {{ obj.PoolID }}
+          {% if obj.pool_name %}<div class="text-slate-400 dark:text-slate-500 font-normal">{{ obj.pool_name }}</div>{% endif %}
+        </td>
+        <td class="px-3 py-1">
+          {% if obj.function_type == 'KANTIN' %}<span class="text-amber-600 dark:text-amber-400 font-medium">🍽️ KANTIN</span>
+          {% else %}<span class="text-slate-500 dark:text-slate-400">Bukan KANTIN</span>{% endif %}
+        </td>
+        <td class="px-3 py-1 text-slate-500 dark:text-slate-400">{{ obj.updated_at|date:"d M Y H:i" }}</td>
+        <td class="px-3 py-1 text-right">
+          <div class="flex justify-end gap-2">
+            <a href="{% url 'mclock:pool_device_function_edit' obj.pk %}" class="px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600">Edit</a>
+            <form action="{% url 'mclock:pool_device_function_delete' obj.pk %}" method="post"
+                  onsubmit="return confirm('Hapus mapping PoolID {{ obj.PoolID }} secara permanen?');">
+              {% csrf_token %}
+              <button type="submit" class="px-2.5 py-1.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/40">
+                Hapus
+              </button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" class="px-5 py-8 text-center text-slate-400 dark:text-slate-500">Belum ada mapping Pool Device Function</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% include "partials/pagination.html" %}
+{% endblock %}

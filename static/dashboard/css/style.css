@@ -1,0 +1,46 @@
+/* Custom tweaks di atas Tailwind CDN */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+body { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
+
+/* --- Sidebar collapse (khusus desktop, >=1024px / breakpoint 'lg' Tailwind) ---
+   Discope ke media query supaya tidak bentrok dengan mode mobile (drawer
+   overlay full-width yang dikontrol lewat class fixed/translate-x di HTML). */
+.sidebar-panel { width: 16rem; } /* setara Tailwind w-64 */
+
+@media (min-width: 1024px) {
+  [data-sidebar="collapsed"] .sidebar-panel { width: 4.5rem !important; }
+  [data-sidebar="collapsed"] .sidebar-label { display: none !important; }
+  [data-sidebar="collapsed"] #sidebarToggleIcon { display: inline-block; transform: rotate(180deg); }
+}
+
+/* Kurangi delay/ambiguitas gesture tap di mobile pada tombol dropdown */
+.row-action-toggle-native, #userMenuBtn, #iclockMenuToggle {
+  touch-action: manipulation;
+}
+
+/* Dropdown aksi per-baris pakai <details>/<summary> asli -- sembunyikan
+   marker segitiga bawaan browser (beda pseudo-element antara WebKit & yang lain) */
+.row-action-details summary { list-style: none; cursor: pointer; }
+.row-action-details summary::-webkit-details-marker { display: none; }
+.row-action-details summary::marker { content: ''; display: none; }
+
+/* Cell IN/OUT di Attendance Recap, pola <details>/<summary> yang sama */
+.recap-cell summary { list-style: none; cursor: pointer; }
+.recap-cell summary::-webkit-details-marker { display: none; }
+.recap-cell summary::marker { content: ''; display: none; }
+.recap-cell .recap-cell-popup { position: absolute; }
+
+/* Spinner loading (dipakai di form Transfer Finger, prosesnya bisa lama
+   karena konek ke device fisik satu per satu) */
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e2e8f0;
+  border-top-color: #4f46e5;
+  border-radius: 50%;
+  animation: spinner-rotate 0.8s linear infinite;
+}
+@keyframes spinner-rotate {
+  to { transform: rotate(360deg); }
+}

@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Transfer Data Finger{% endblock %}
+{% block page_title %}Transfer Data Finger{% endblock %}
+{% block content %}
+<div class="mb-4">
+  <a href="{% url 'iclock:active_device_show_users' source_device.SN %}" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
+    &larr; Kembali ke Show Device User
+  </a>
+</div>
+
+<form method="post" id="transferFingerForm">
+  {% csrf_token %}
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+    <!-- Kolom 1: User ID (PIN), multiline -->
+    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 p-5">
+      <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">User ID (PIN)</label>
+      {{ form.pins }}
+      <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">Satu PIN per baris. Bisa lebih dari satu user sekaligus.</p>
+      {% if form.pins.errors %}<p class="text-xs text-rose-600 dark:text-rose-400 mt-1">{{ form.pins.errors.0 }}</p>{% endif %}
+    </div>
+
+    <!-- Kolom 2: From Device / To Pool / Target Device -->
+    <div class="bg-white rounded-xl shadow-sm border p-5 space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">From Device</label>
+        {{ form.from_device }}
+        {% if form.from_device.errors %}<p class="text-xs text-rose-600 dark:text-rose-400 mt-1">{{ form.from_device.errors.0 }}</p>{% endif %}
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">To Pool</label>
+        {{ form.to_pool }}
+        {% if form.to_pool.errors %}<p class="text-xs text-rose-600 dark:text-rose-400 mt-1">{{ form.to_pool.errors.0 }}</p>{% endif %}
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Target Device</label>
+        {{ form.target_device }}
+        <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">{{ form.target_device.help_text }}</p>
+      </div>
+      {% if form.non_field_errors %}
+      <p class="text-xs text-rose-600 dark:text-rose-400">{{ form.non_field_errors.0 }}</p>
+      {% endif %}
+    </div>
+
+    <!-- Kolom 3: Status transfer -->
+    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 p-5">
+      <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Status Transfer</label>
+      <textarea readonly rows="12"
+                class="w-full px-3 py-2 border dark:border-slate-600 rounded-lg text-xs font-mono bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300"
+      >{% if log_output %}{{ log_output }}{% else %}Belum ada proses transfer. Isi form di sebelah kiri lalu klik "Mulai Transfer".{% endif %}</textarea>
+    </div>
+  </div>
+
+  <div class="mt-4 flex gap-2">
+    <button type="submit" id="transferSubmitBtn"
+            class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium inline-flex items-center gap-2">
+      <span id="transferSubmitLabel">Mulai Transfer</span>
+    </button>
+    <a href="{% url 'iclock:active_device_show_users' source_device.SN %}"
+       class="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg text-sm">
+      Batal
+    </a>
+  </div>
+</form>
+
+<!-- Overlay loading -- muncul pas form disubmit, kasih kesan proses lagi jalan
+     (transfer ke device fisik bisa makan waktu beberapa detik s/d menit) -->
+<div id="transferLoadingOverlay" class="hidden fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center">
+  <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl p-8 max-w-sm w-full mx-4 text-center">
+    <div class="spinner mx-auto mb-4"></div>
+    <div class="font-semibold text-slate-800 dark:text-slate-100">Sedang memproses transfer...</div>
+    <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+      Menghubungi device satu per satu, mohon tunggu &mdash; jangan tutup atau refresh halaman ini.
+    </p>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const poolSelect = document.getElementById('id_to_pool');
+  const deviceSelect = document.getElementById('id_target_device');
+  if (poolSelect && deviceSelect) {
+    poolSelect.addEventListener('change', () => {
+      const poolId = poolSelect.value;
+      deviceSelect.innerHTML = '<option value="">---------</option>';
+      if (!poolId) return;
+      fetch('{% url "iclock:ajax_devices_by_pool" %}?pool_id=' + encodeURIComponent(poolId))
+        .then((r) => r.json())
+        .then((data) => {
+          (data.devices || []).forEach((d) => {
+            const opt = document.createElement('option');
+            opt.value = d.SN;
+            opt.textContent = d.Alias || d.SN;
+            deviceSelect.appendChild(opt);
+          });
+        })
+        .catch(() => {
+          // Diamkan -- kalau AJAX gagal, admin masih bisa submit tanpa target
+          // device spesifik (artinya ke semua device di pool tersebut).
+        });
+    });
+  }
+
+  // Tampilkan overlay loading begitu form disubmit, dan disable tombol
+  // supaya tidak ke-klik dobel. Karena ini submit form biasa (bukan AJAX),
+  // overlay ini otomatis "nempel" sampai halaman hasil selesai dimuat --
+  // pas persis kasih kesan proses lagi berjalan.
+  const transferForm = document.getElementById('transferFingerForm');
+  const overlay = document.getElementById('transferLoadingOverlay');
+  const submitBtn = document.getElementById('transferSubmitBtn');
+  const submitLabel = document.getElementById('transferSubmitLabel');
+  if (transferForm && overlay && submitBtn) {
+    transferForm.addEventListener('submit', (event) => {
+      if (transferForm.dataset.submitting === '1') {
+        event.preventDefault();
+        return;
+      }
+      transferForm.dataset.submitting = '1';
+      overlay.classList.remove('hidden');
+      submitBtn.disabled = true;
+      submitBtn.classList.add('opacity-70', 'cursor-not-allowed');
+      if (submitLabel) submitLabel.textContent = 'Memproses...';
+    });
+  }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}{{ source.title }}{% endblock %}
+{% block page_title %}Mobile Attendance — {{ source.title }}{% endblock %}
+{% block content %}
+<div class="mb-4">
+  <a href="{% url 'mclock:mobile_attendance_home' %}" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
+    &larr; Kembali ke Mobile Attendance
+  </a>
+</div>
+
+<!-- Tab pindah submenu -->
+<div class="flex flex-wrap gap-2 mb-4">
+  {% for s in sources %}
+  <a href="{% url 'mclock:mobile_attendance_table' s.slug %}"
+     class="px-3 py-1.5 rounded-lg text-sm font-medium
+            {% if s.slug == slug %}bg-indigo-600 text-white{% else %}bg-white dark:bg-slate-800 border dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700{% endif %}">
+    {{ s.title }}
+  </a>
+  {% endfor %}
+</div>
+
+<!-- Info sumber data -->
+<div class="text-xs text-slate-400 dark:text-slate-500 font-mono mb-4">
+  Sumber: {{ source.server }}/{{ source.database }} · Read-only, data yang belum diproses (bProses/bTransfer = 0)
+</div>
+
+{% if error %}
+<div class="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 rounded-xl p-5 text-rose-700 dark:text-rose-300 text-sm">
+  ❌ Gagal mengambil data: {{ error }}
+</div>
+{% else %}
+
+<form method="get" class="flex flex-col sm:flex-row sm:items-center gap-2 mb-4">
+  <input type="text" name="q" value="{{ search }}" placeholder="Cari NIK / DibuatOleh..."
+         class="px-3 py-2 border dark:border-slate-600 rounded-lg text-sm w-full sm:w-72 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none">
+  <input type="hidden" name="sort" value="{{ sort }}">
+  <input type="hidden" name="dir" value="{{ dir }}">
+  <button class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-sm shrink-0">Cari</button>
+  {% if search %}
+  <a href="{% url 'mclock:mobile_attendance_table' slug %}" class="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg text-sm text-center shrink-0">Reset</a>
+  {% endif %}
+  <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 shrink-0 sm:ml-auto">
+    Baris/halaman:
+    <select name="page_size" onchange="this.form.submit()"
+            class="px-2 py-1.5 border dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none">
+      {% for opt in page_size_options %}
+        <option value="{{ opt }}" {% if opt == page_size %}selected{% endif %}>{{ opt }}</option>
+      {% endfor %}
+    </select>
+  </label>
+</form>
+
+<div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 overflow-x-auto">
+  <table class="w-full text-xs">
+    <thead class="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 text-left select-none">
+      <tr>
+        <th class="px-3 py-1">No</th>
+        <th class="px-3 py-1">
+          <a href="{{ sort_urls.Id }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
+            Id {% if sort == 'Id' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+          </a>
+        </th>
+        <th class="px-3 py-1">
+          <a href="{{ sort_urls.sn }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
+            SN {% if sort == 'sn' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+          </a>
+        </th>
+        <th class="px-3 py-1">
+          <a href="{{ sort_urls.nik }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
+            NIK {% if sort == 'nik' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+          </a>
+        </th>
+        <th class="px-3 py-1">
+          <a href="{{ sort_urls.ttime }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
+            Waktu {% if sort == 'ttime' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+          </a>
+        </th>
+        <th class="px-3 py-1">
+          <a href="{{ sort_urls.ctype }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
+            Tipe {% if sort == 'ctype' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+          </a>
+        </th>
+        <th class="px-3 py-1">
+          <a href="{{ sort_urls.bProses }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
+            Diproses {% if sort == 'bProses' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+          </a>
+        </th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in page_obj %}
+      <tr class="border-t dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/40">
+        <td class="px-3 py-1">{{ page_obj.start_index|add:forloop.counter0 }}</td>
+        <td class="px-3 py-1">{{ row.Id }}</td>
+        <td class="px-3 py-1">{{ row.sn|default:"-" }}</td>
+        <td class="px-3 py-1 font-medium">{{ row.nik|default:"-" }}</td>
+        <td class="px-3 py-1 text-slate-500 dark:text-slate-400">{{ row.ttime|default:"-" }}</td>
+        <td class="px-3 py-1">{{ row.ctype|default:"-" }}</td>
+        <td class="px-3 py-1">
+          {% if row.bProses %}
+            <span class="text-amber-600 dark:text-amber-400">Ya</span>
+          {% else %}
+            <span class="text-rose-500 dark:text-rose-400">Belum</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="7" class="px-5 py-8 text-center text-slate-400 dark:text-slate-500">Tidak ada data yang belum diproses</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% include "partials/pagination.html" %}
+
+{% endif %}
+{% endblock %}

@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}Mobile Pool Location{% endblock %}
+{% block page_title %}Mobile Attendance — Mobile Pool Location (Polygon){% endblock %}
+{% block content %}
+<div class="mb-4">
+  <a href="{% url 'mclock:mobile_attendance_home' %}" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
+    &larr; Kembali ke Mobile Attendance
+  </a>
+</div>
+
+<p class="text-xs text-slate-400 dark:text-slate-500 mb-4">
+  Titik-titik (vertex) polygon geofence per PoolID, hasil sinkronisasi dari MSSQL
+  (<code>python manage.py sync_mobile_pool_loc</code>). Ini yang dipakai untuk verifikasi geofence
+  check-in/out (menggantikan radius lingkaran <a href="{% url 'mclock:mobile_pool_list' %}" class="underline">Mobile Pool</a>
+  yang lama — tabel itu sekarang murni jadi lookup nama/kode pool).
+</p>
+
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+  <form method="get" class="flex flex-wrap items-center gap-2">
+    <input type="text" name="q" value="{{ search }}" placeholder="Cari PoolID..."
+           class="px-3 py-2 border dark:border-slate-600 rounded-lg text-sm w-full sm:w-72 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none">
+    <input type="hidden" name="sort" value="{{ sort }}">
+    <input type="hidden" name="dir" value="{{ dir }}">
+    <button class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-sm shrink-0">Cari</button>
+    {% if search %}
+    <a href="{% url 'mclock:mobile_pool_loc_list' %}" class="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg text-sm text-center shrink-0">Reset</a>
+    {% endif %}
+    <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 shrink-0">
+      Baris/halaman:
+      <select name="page_size" onchange="this.form.submit()"
+              class="px-2 py-1.5 border dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none">
+        {% for opt in page_size_options %}
+          <option value="{{ opt }}" {% if opt == page_size %}selected{% endif %}>{{ opt }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </form>
+  <a href="{% url 'mclock:mobile_pool_loc_add' %}"
+     class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium text-center shrink-0">
+    + Tambah Titik (Testing)
+  </a>
+</div>
+
+<div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 overflow-x-auto">
+  <table class="w-full text-xs">
+    <thead class="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 text-left select-none">
+      <tr>
+        <th class="px-3 py-1">No</th>
+        <th class="px-3 py-1">
+          <a href="{{ sort_urls.PoolID }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
+            PoolID {% if sort == 'PoolID' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+          </a>
+        </th>
+        <th class="px-3 py-1">
+          <a href="{{ sort_urls.point_count }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
+            Jumlah Titik {% if sort == 'point_count' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+          </a>
+        </th>
+        <th class="px-3 py-1">
+          <a href="{{ sort_urls.latest_synced }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
+            Sync Terakhir {% if sort == 'latest_synced' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+          </a>
+        </th>
+        <th class="px-3 py-1 text-right">Aksi</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr class="border-t dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/40">
+        <td class="px-3 py-1">{{ row.no }}</td>
+        <td class="px-3 py-1 font-medium">
+          {{ row.pool_id }}
+          {% if row.pool_name %}<div class="text-slate-400 dark:text-slate-500 font-normal">{{ row.pool_name }}</div>{% endif %}
+        </td>
+        <td class="px-3 py-1">
+          {{ row.point_count }}
+          {% if row.point_count < 3 %}<span class="text-rose-500 dark:text-rose-400 ml-1" title="Minimal 3 titik dibutuhkan utk membentuk polygon valid">⚠️ belum cukup</span>{% endif %}
+        </td>
+        <td class="px-3 py-1 text-slate-500 dark:text-slate-400">{{ row.latest_synced|date:"d M Y H:i"|default:"-" }}</td>
+        <td class="px-3 py-1 text-right">
+          <div class="flex justify-end gap-2">
+            <button type="button" class="loc-detail-toggle px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-xs font-medium"
+                    data-target="loc-detail-{{ forloop.counter }}">
+              Lihat Titik ▾
+            </button>
+            <form action="{% url 'mclock:mobile_pool_loc_delete_pool' row.pool_id %}" method="post"
+                  onsubmit="return confirm('Hapus SEMUA {{ row.point_count }} titik milik PoolID {{ row.pool_id }} secara permanen?');">
+              {% csrf_token %}
+              <button type="submit" class="px-2.5 py-1.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-xs font-medium">
+                Hapus Semua
+              </button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      <tr id="loc-detail-{{ forloop.counter }}" class="hidden border-t dark:border-slate-700">
+        <td colspan="5" class="p-0 bg-slate-50 dark:bg-slate-900/30">
+          <table class="w-full text-xs">
+            <thead class="text-slate-500 dark:text-slate-400 text-left">
+              <tr>
+                <th class="px-6 py-1.5">Urut</th>
+                <th class="px-3 py-1.5">Latitude</th>
+                <th class="px-3 py-1.5">Longitude</th>
+                <th class="px-3 py-1.5 text-right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for point in row.points %}
+              <tr class="border-t dark:border-slate-700">
+                <td class="px-6 py-1.5">{{ point.Urut }}</td>
+                <td class="px-3 py-1.5 font-mono">{{ point.Latitude|default:"-" }}</td>
+                <td class="px-3 py-1.5 font-mono">{{ point.Longitude|default:"-" }}</td>
+                <td class="px-3 py-1.5 text-right">
+                  <form action="{% url 'mclock:mobile_pool_loc_delete' point.pk %}" method="post"
+                        onsubmit="return confirm('Hapus titik #{{ point.Urut }} milik PoolID {{ row.pool_id }}?');">
+                    {% csrf_token %}
+                    <button type="submit" class="px-2 py-1 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/40">
+                      Hapus
+                    </button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" class="px-5 py-8 text-center text-slate-400 dark:text-slate-500">Belum ada data Mobile Pool Location</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% include "partials/pagination.html" %}
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.loc-detail-toggle').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const target = document.getElementById(btn.dataset.target);
+      if (!target) return;
+      const isHidden = target.classList.contains('hidden');
+      target.classList.toggle('hidden', !isHidden);
+      btn.textContent = isHidden ? 'Sembunyikan ▴' : 'Lihat Titik ▾';
+    });
+  });
+});
+</script>
+{% endblock %}

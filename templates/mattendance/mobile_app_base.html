@@ -1,0 +1,102 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>{% block title %}Mobile Attendance{% endblock %}</title>
+<script>
+  (function () {
+    try {
+      const stored = localStorage.getItem('theme');
+      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const isDark = stored ? stored === 'dark' : prefersDark;
+      if (isDark) document.documentElement.classList.add('dark');
+    } catch (e) {}
+  })();
+</script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = { darkMode: 'class' };
+</script>
+<style>
+  /* Native-app feel: no text selection/callout on tap, no tap highlight flash */
+  * { -webkit-tap-highlight-color: transparent; }
+  body { overscroll-behavior-y: contain; }
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .safe-top { padding-top: env(safe-area-inset-top, 0px); }
+</style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 antialiased overflow-x-hidden">
+
+<div class="min-h-screen flex flex-col max-w-md mx-auto bg-slate-50 dark:bg-slate-950 lg:shadow-2xl lg:min-h-screen relative">
+
+  <!-- Header -->
+  <header class="safe-top shrink-0 bg-gradient-to-br from-indigo-600 to-indigo-700 dark:from-indigo-800 dark:to-slate-900 text-white px-5 pt-6 pb-8 rounded-b-3xl shadow-lg">
+    <div class="flex items-center justify-between mb-1">
+      <div>
+        <p class="text-indigo-200 dark:text-indigo-300 text-xs font-medium">{% now "l, d F Y" %}</p>
+        <h1 class="text-xl font-bold mt-0.5">Halo, {{ display_name|default:"Karyawan" }} 👋</h1>
+      </div>
+      <div class="w-11 h-11 rounded-full bg-white/15 flex items-center justify-center text-lg font-bold shrink-0">
+        {{ display_name|default:"K"|slice:":1"|upper }}
+      </div>
+    </div>
+  </header>
+
+  <!-- Flash messages -->
+  {% if messages %}
+  <div class="px-4 -mt-4 relative z-10 space-y-2">
+    {% for message in messages %}
+    <div class="px-4 py-3 rounded-2xl text-sm shadow-md border
+      {% if message.tags == 'error' %}bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800
+      {% else %}bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800{% endif %}">
+      {{ message }}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Content -->
+  <main class="flex-1 px-4 pt-4 pb-24">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Bottom tab bar -->
+  <nav class="safe-bottom fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white dark:bg-slate-900 border-t dark:border-slate-800 flex items-stretch shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
+    <a href="{% url 'mattendance:checkin_test_page' %}"
+       class="flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-xs font-medium transition
+              {% if request.resolver_match.url_name == 'checkin_test_page' %}text-indigo-600 dark:text-indigo-400{% else %}text-slate-400 dark:text-slate-500{% endif %}">
+      <span class="text-xl leading-none">📍</span>
+      <span>Absen</span>
+    </a>
+    <a href="{% url 'mattendance:checkin_meal_page' %}"
+       class="flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-xs font-medium transition
+              {% if request.resolver_match.url_name == 'checkin_meal_page' %}text-indigo-600 dark:text-indigo-400{% else %}text-slate-400 dark:text-slate-500{% endif %}">
+      <span class="text-xl leading-none">🍽️</span>
+      <span>Makan</span>
+    </a>
+    <a href="{% url 'mattendance:face_enroll_page' %}"
+       class="flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-xs font-medium transition
+              {% if request.resolver_match.url_name == 'face_enroll_page' %}text-indigo-600 dark:text-indigo-400{% else %}text-slate-400 dark:text-slate-500{% endif %}">
+      <span class="text-xl leading-none">🙂</span>
+      <span>Wajah</span>
+    </a>
+    <a href="{% url 'mattendance:attendance_history_page' %}"
+       class="flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-xs font-medium transition
+              {% if request.resolver_match.url_name == 'attendance_history_page' %}text-indigo-600 dark:text-indigo-400{% else %}text-slate-400 dark:text-slate-500{% endif %}">
+      <span class="text-xl leading-none">📋</span>
+      <span>Riwayat</span>
+    </a>
+    <a href="{% url 'mattendance:mobile_profile_page' %}"
+       class="flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-xs font-medium transition
+              {% if request.resolver_match.url_name == 'mobile_profile_page' or request.resolver_match.url_name == 'mobile_change_password_page' %}text-indigo-600 dark:text-indigo-400{% else %}text-slate-400 dark:text-slate-500{% endif %}">
+      <span class="text-xl leading-none">👤</span>
+      <span>Profil</span>
+    </a>
+  </nav>
+</div>
+
+{% block extra_js %}{% endblock %}
+</body>
+</html>

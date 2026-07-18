@@ -1,0 +1,159 @@
+{% extends "mattendance/mobile_app_base.html" %}
+{% block title %}Check/Meal{% endblock %}
+{% block content %}
+
+<div class="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 p-4 mb-4">
+  <div class="relative bg-slate-900 rounded-2xl overflow-hidden" style="aspect-ratio: 1/1;">
+    <video id="video" autoplay playsinline muted class="w-full h-full object-cover"></video>
+    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+      <div class="w-48 h-48 border-4 border-emerald-400 rounded-3xl opacity-80"></div>
+    </div>
+  </div>
+  <canvas id="canvas" class="hidden"></canvas>
+  <p id="qrStatusBox" class="text-center text-xs text-slate-400 dark:text-slate-500 mt-3">Mengaktifkan kamera...</p>
+</div>
+
+<div class="bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900 rounded-2xl p-4 mb-4 flex items-start gap-2">
+  <span class="text-lg shrink-0">🍽️</span>
+  <p class="text-sm text-indigo-700 dark:text-indigo-300">Arahkan kamera ke QR code di kantin untuk absen makan siang.</p>
+</div>
+
+<div id="statusBox" class="hidden rounded-2xl p-4 text-sm text-center font-medium mb-4"></div>
+<div id="coordsBox" class="hidden mb-4 text-center text-xs text-slate-300 dark:text-slate-600 font-mono"></div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const qrStatusBox = document.getElementById('qrStatusBox');
+  const statusBox = document.getElementById('statusBox');
+  const coordsBox = document.getElementById('coordsBox');
+
+  let scanning = false;
+  let submitting = false;
+
+  function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+    return '';
+  }
+
+  function showStatus(message, isSuccess) {
+    statusBox.classList.remove('hidden', 'bg-emerald-50', 'dark:bg-emerald-950/30', 'text-emerald-700', 'dark:text-emerald-400', 'bg-rose-50', 'dark:bg-rose-950/30', 'text-rose-700', 'dark:text-rose-400');
+    if (isSuccess) {
+      statusBox.classList.add('bg-emerald-50', 'dark:bg-emerald-950/30', 'text-emerald-700', 'dark:text-emerald-400');
+    } else {
+      statusBox.classList.add('bg-rose-50', 'dark:bg-rose-950/30', 'text-rose-700', 'dark:text-rose-400');
+    }
+    statusBox.textContent = message;
+  }
+
+  if (typeof jsQR === 'undefined') {
+    showStatus('Gagal memuat pemindai QR -- cek koneksi internet Anda.', false);
+  } else if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      .then((stream) => {
+        video.srcObject = stream;
+        video.play();
+        scanning = true;
+        qrStatusBox.textContent = 'Mencari QR code...';
+        requestAnimationFrame(tick);
+      })
+      .catch((err) => showStatus('Gagal mengakses kamera: ' + err.message, false));
+  } else {
+    showStatus('Browser Anda tidak mendukung akses kamera.', false);
+  }
+
+  function tick() {
+    if (!scanning) return;
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+      if (code && code.data && !submitting) {
+        qrStatusBox.textContent = 'QR terdeteksi: ' + code.data;
+        handleQrDetected(code.data);
+        return;
+      }
+    }
+    requestAnimationFrame(tick);
+  }
+
+  function handleQrDetected(qrContent) {
+    submitting = true;
+    scanning = false;
+    if (!navigator.geolocation) {
+      showStatus('Browser Anda tidak mendukung layanan lokasi.', false);
+      resumeScanning();
+      return;
+    }
+    showStatus('QR terdeteksi, mengambil lokasi...', true);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude;
+        const lon = position.coords.longitude;
+        coordsBox.textContent = `${lat.toFixed(6)}, ${lon.toFixed(6)} (±${Math.round(position.coords.accuracy)}m)`;
+        coordsBox.classList.remove('hidden');
+
+        const formData = new FormData();
+        formData.append('latitude', lat);
+        formData.append('longitude', lon);
+        formData.append('qr_content', qrContent);
+
+        fetch('{% url "mattendance:checkin_meal_submit" %}', {
+          method: 'POST',
+          headers: { 'X-CSRFToken': getCookie('csrftoken') },
+          body: formData,
+        })
+          .then((r) => r.json())
+          .then((data) => {
+            showStatus(data.message, data.success);
+            if (data.success) {
+              stopCamera();
+              setTimeout(() => { window.location.href = '{% url "mattendance:attendance_history_page" %}'; }, 1200);
+            } else {
+              resumeScanning();
+            }
+          })
+          .catch(() => {
+            showStatus('Gagal menghubungi server.', false);
+            resumeScanning();
+          });
+      },
+      (error) => {
+        showStatus('Gagal mengambil lokasi: ' + error.message, false);
+        resumeScanning();
+      },
+      { enableHighAccuracy: true, timeout: 15000 }
+    );
+  }
+
+  function stopCamera() {
+    // Matikan stream kamera & hentikan loop scan QR setelah Check/Meal berhasil.
+    scanning = false;
+    if (video.srcObject) {
+      video.srcObject.getTracks().forEach((track) => track.stop());
+      video.srcObject = null;
+    }
+  }
+
+  function resumeScanning() {
+    setTimeout(() => {
+      submitting = false;
+      scanning = true;
+      qrStatusBox.textContent = 'Mencari QR code...';
+      requestAnimationFrame(tick);
+    }, 3000);
+  }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Attendance Log{% endblock %}
+{% block page_title %}Mobile Attendance — Log{% endblock %}
+{% block content %}
+<div class="mb-4">
+  <a href="{% url 'mattendance:checkin_test_page' %}" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
+    &larr; Ke halaman Check-in/Out
+  </a>
+</div>
+
+<form method="get" class="flex flex-col sm:flex-row sm:items-center gap-2 mb-4">
+  <input type="text" name="q" value="{{ search }}" placeholder="Cari username / nama / nama pool..."
+         class="px-3 py-2 border dark:border-slate-600 rounded-lg text-sm w-full sm:w-72 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none">
+  <input type="hidden" name="sort" value="{{ sort }}">
+  <input type="hidden" name="dir" value="{{ dir }}">
+  <button class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-sm shrink-0">Cari</button>
+  {% if search %}
+  <a href="{% url 'mattendance:attendance_log_list' %}" class="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg text-sm text-center shrink-0">Reset</a>
+  {% endif %}
+  <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 shrink-0 sm:ml-auto">
+    Baris/halaman:
+    <select name="page_size" onchange="this.form.submit()"
+            class="px-2 py-1.5 border dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none">
+      {% for opt in page_size_options %}
+        <option value="{{ opt }}" {% if opt == page_size %}selected{% endif %}>{{ opt }}</option>
+      {% endfor %}
+    </select>
+  </label>
+</form>
+
+<div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 overflow-x-auto">
+  <table class="w-full text-xs">
+    <thead class="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 text-left select-none">
+      <tr>
+        <th class="px-3 py-1">No</th>
+        <th class="px-3 py-1">
+          <a href="{{ sort_urls.timestamp }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
+            Waktu {% if sort == 'timestamp' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+          </a>
+        </th>
+        <th class="px-3 py-1">
+          <a href="{{ sort_urls.user__username }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
+            User {% if sort == 'user__username' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+          </a>
+        </th>
+        <th class="px-3 py-1">
+          <a href="{{ sort_urls.check_type }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
+            Tipe {% if sort == 'check_type' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+          </a>
+        </th>
+        <th class="px-3 py-1">
+          <a href="{{ sort_urls.PoolID__PoolName }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
+            Pool {% if sort == 'PoolID__PoolName' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+          </a>
+        </th>
+        <th class="px-3 py-1">Function</th>
+        <th class="px-3 py-1">Jarak</th>
+        <th class="px-3 py-1">Lokasi</th>
+        <th class="px-3 py-1">Wajah</th>
+        <th class="px-3 py-1 text-right">Aksi</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for log in page_obj %}
+      <tr class="border-t dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/40">
+        <td class="px-3 py-1">{{ page_obj.start_index|add:forloop.counter0 }}</td>
+        <td class="px-3 py-1 text-slate-500 dark:text-slate-400">{{ log.timestamp|date:"d M Y H:i:s" }}</td>
+        <td class="px-3 py-1 font-medium">{{ log.user.username }}</td>
+        <td class="px-3 py-1">
+          {% if log.check_type == 'IN' %}<span class="text-emerald-600 dark:text-emerald-400">Check-in</span>
+          {% elif log.check_type == 'OUT' %}<span class="text-amber-600 dark:text-amber-400">Check-out</span>
+          {% else %}<span class="text-purple-600 dark:text-purple-400" title="{% if log.qr_content %}QR: {{ log.qr_content }}{% endif %}">🍽️ Check/Meal</span>{% endif %}
+        </td>
+        <td class="px-3 py-1">
+          {% if log.PoolID %}{{ log.PoolID.PoolName|default:log.PoolID.PoolID }}
+          {% else %}<span class="text-rose-500 dark:text-rose-400" title="Pool sudah dihapus dari Mobile Pool">- (pool dihapus)</span>{% endif %}
+        </td>
+        <td class="px-3 py-1 font-mono">{{ log.Function|default:"-" }}</td>
+        <td class="px-3 py-1 font-mono">{% if log.distance_meters is not None %}{{ log.distance_meters|floatformat:1 }}m{% else %}-{% endif %}</td>
+        <td class="px-3 py-1">
+          {% if log.location_verified %}<span class="text-emerald-600 dark:text-emerald-400">✓ Terverifikasi</span>
+          {% else %}<span class="text-rose-500 dark:text-rose-400">✗ Gagal</span>{% endif %}
+        </td>
+        <td class="px-3 py-1">
+          {% if log.check_type == 'MEAL' %}<span class="text-slate-300 dark:text-slate-600">N/A (pakai QR)</span>
+          {% elif log.face_verified %}<span class="text-emerald-600 dark:text-emerald-400" title="Jarak: {{ log.face_distance|floatformat:3|default:'-' }}">✓ Terverifikasi</span>
+          {% else %}<span class="text-slate-300 dark:text-slate-600">- (log lama, sebelum face verification aktif)</span>{% endif %}
+        </td>
+        <td class="px-3 py-1 text-right">
+          <form action="{% url 'mattendance:attendance_log_delete' log.pk %}" method="post"
+                onsubmit="return confirm('Hapus log check-in/out ini secara permanen?');">
+            {% csrf_token %}
+            <button type="submit" class="px-2.5 py-1.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/40">
+              Hapus
+            </button>
+          </form>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="10" class="px-5 py-8 text-center text-slate-400 dark:text-slate-500">Belum ada log check-in/out</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% include "partials/pagination.html" %}
+{% endblock %}

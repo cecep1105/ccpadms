@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Profil Saya{% endblock %}
+{% block page_title %}Profil Saya{% endblock %}
+{% block content %}
+<div class="max-w-lg bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 p-6">
+  <div class="flex items-center gap-4 mb-6 pb-6 border-b">
+    <div class="w-16 h-16 rounded-full bg-indigo-600 text-white flex items-center justify-center text-2xl font-semibold">
+      {{ user.username|slice:':1'|upper }}
+    </div>
+    <div>
+      <div class="font-semibold text-lg">{{ user.full_name }}</div>
+      <div class="text-sm text-slate-400 dark:text-slate-500">
+        @{{ user.username }} ·
+        {% if user.auth_source == 'ldap' %}Akun LDAP{% else %}Akun Lokal{% endif %}
+      </div>
+    </div>
+  </div>
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nama Depan</label>
+        {{ form.first_name }}
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nama Belakang</label>
+        {{ form.last_name }}
+      </div>
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Email</label>
+      {{ form.email }}
+    </div>
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Telepon</label>
+        {{ form.phone_number }}
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Departemen</label>
+        {{ form.department }}
+      </div>
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Jabatan</label>
+      {{ form.title }}
+    </div>
+    <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium">Simpan Perubahan</button>
+  </form>
+</div>
+{% endblock %}

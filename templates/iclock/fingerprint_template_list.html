@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Fingerprint Template{% endblock %}
+{% block page_title %}Fingerprint Template{% endblock %}
+{% block content %}
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+  <form method="get" class="flex flex-wrap items-center gap-2">
+    <input type="text" name="q" value="{{ search }}" placeholder="Cari PIN / nama karyawan..."
+           class="px-3 py-2 border dark:border-slate-600 rounded-lg text-sm w-full sm:w-72 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none">
+    <input type="hidden" name="sort" value="{{ sort }}">
+    <input type="hidden" name="dir" value="{{ dir }}">
+    <button class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-sm shrink-0">Cari</button>
+    <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 shrink-0">
+      Baris/halaman:
+      <select name="page_size" onchange="this.form.submit()"
+              class="px-2 py-1.5 border dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none">
+        {% for opt in page_size_options %}
+          <option value="{{ opt }}" {% if opt == page_size %}selected{% endif %}>{{ opt }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </form>
+  <a href="{% url 'iclock:fingerprint_template_add' %}"
+     class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium text-center shrink-0">
+    + Tambah Template
+  </a>
+</div>
+
+<!-- Di-GROUP per employee (bukan 1 baris per template) supaya tidak terlalu
+     banyak baris kalau 1 employee punya beberapa jari terdaftar -- klik
+     "Lihat Detail" utk expand semua template jari milik employee itu. -->
+<div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 overflow-x-auto">
+  <table class="w-full text-xs">
+    <thead class="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 text-left select-none">
+      <tr>
+        <th class="px-3 py-1">No</th>
+        <th class="px-3 py-1">
+          <a href="{{ sort_urls.name }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
+            Karyawan {% if sort == 'name' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+          </a>
+        </th>
+        <th class="px-3 py-1">
+          <a href="{{ sort_urls.count }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
+            Jumlah Template {% if sort == 'count' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+          </a>
+        </th>
+        <th class="px-3 py-1">
+          <a href="{{ sort_urls.utime }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
+            Refresh Terakhir {% if sort == 'utime' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+          </a>
+        </th>
+        <th class="px-3 py-1 text-right">Aksi</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr class="border-t dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/40">
+        <td class="px-3 py-1">{{ row.no }}</td>
+        <td class="px-3 py-1 font-medium">
+          {{ row.pin }}
+          <div class="text-slate-400 dark:text-slate-500 font-normal">{{ row.name|default:"-" }}</div>
+        </td>
+        <td class="px-3 py-1">{{ row.count }}</td>
+        <td class="px-3 py-1 text-slate-500 dark:text-slate-400">{{ row.latest_utime|date:"d M Y H:i"|default:"-" }}</td>
+        <td class="px-3 py-1 text-right">
+          <button type="button" class="template-detail-toggle px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-xs font-medium"
+                  data-target="tpl-detail-{{ forloop.counter }}">
+            Lihat Detail ▾
+          </button>
+        </td>
+      </tr>
+      <tr id="tpl-detail-{{ forloop.counter }}" class="hidden border-t dark:border-slate-700">
+        <td colspan="5" class="p-0 bg-slate-50 dark:bg-slate-900/30">
+          <table class="w-full text-xs">
+            <thead class="text-slate-500 dark:text-slate-400 text-left">
+              <tr>
+                <th class="px-6 py-1.5">Jari</th>
+                <th class="px-3 py-1.5">Valid</th>
+                <th class="px-3 py-1.5">Device</th>
+                <th class="px-3 py-1.5">Refresh Time</th>
+                <th class="px-3 py-1.5 text-right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for t in row.templates %}
+              <tr class="border-t dark:border-slate-700">
+                <td class="px-6 py-1.5">{{ t.get_FingerID_display }}</td>
+                <td class="px-3 py-1.5">
+                  {% if t.Valid %}<span class="text-emerald-600 dark:text-emerald-400">Ya</span>{% else %}<span class="text-rose-500 dark:text-rose-400">Tidak</span>{% endif %}
+                </td>
+                <td class="px-3 py-1.5">{{ t.SN|default:"-" }}</td>
+                <td class="px-3 py-1.5 text-slate-500 dark:text-slate-400">{{ t.UTime|date:"d M Y H:i"|default:"-" }}</td>
+                <td class="px-3 py-1.5 text-right">
+                  <div class="flex justify-end gap-2">
+                    <a href="{% url 'iclock:fingerprint_template_edit' t.pk %}" class="px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600">Edit</a>
+                    <form action="{% url 'iclock:fingerprint_template_delete' t.pk %}" method="post"
+                          onsubmit="return confirm('Hapus template ini secara permanen?');">
+                      {% csrf_token %}
+                      <button class="px-2.5 py-1.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/40">Hapus</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" class="px-5 py-8 text-center text-slate-400 dark:text-slate-500">Belum ada fingerprint template</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% include "partials/pagination.html" %}
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  // Toggle baris detail per employee -- pakai getElementById (bukan CSS
+  // selector dinamis) supaya tidak ada risiko masalah semacam CSS.escape()
+  // yang pernah bikin fitur lain gagal di sejumlah browser.
+  document.querySelectorAll('.template-detail-toggle').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const target = document.getElementById(btn.dataset.target);
+      if (!target) return;
+      const isHidden = target.classList.contains('hidden');
+      target.classList.toggle('hidden', !isHidden);
+      btn.textContent = isHidden ? 'Sembunyikan ▴' : 'Lihat Detail ▾';
+    });
+  });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}Device User - {{ device.SN }}{% endblock %}
+{% block page_title %}Device User: {{ device.Alias|default:device.SN }}{% endblock %}
+{% block content %}
+<div class="mb-4">
+  <a href="{% url 'iclock:active_device_list' %}" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">&larr; Kembali ke Active Device</a>
+</div>
+
+<div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 p-5 mb-4">
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+    <div>
+      <div class="text-slate-400 dark:text-slate-500">Serial Number</div>
+      <div class="font-medium">{{ device.SN }}</div>
+    </div>
+    <div>
+      <div class="text-slate-400 dark:text-slate-500">Alias</div>
+      <div class="font-medium">{{ device.Alias|default:"-" }}</div>
+    </div>
+    <div>
+      <div class="text-slate-400 dark:text-slate-500">IP Address</div>
+      <div class="font-medium">{{ device.IPAddress|default:"-" }}</div>
+    </div>
+    <div>
+      <div class="text-slate-400 dark:text-slate-500">Pool</div>
+      <div class="font-medium">{{ device.DeptID|default:"-" }}</div>
+    </div>
+  </div>
+  <p class="text-xs text-slate-400 dark:text-slate-500 mt-3">
+    Data di bawah diambil langsung dari memori device secara real-time (lewat pyzk), bukan dari
+    tabel Employee di database.
+  </p>
+</div>
+
+{% if error %}
+<div class="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 rounded-xl p-5 text-rose-700 dark:text-rose-300 text-sm">
+  <div class="font-semibold mb-1">Gagal mengambil data dari device</div>
+  <p>{{ error }}</p>
+</div>
+{% else %}
+<form method="get" class="flex flex-col sm:flex-row sm:items-center gap-2 mb-4">
+  <input type="text" name="pin" value="{{ pin_filter }}" placeholder="Filter User ID..."
+         class="px-3 py-2 border dark:border-slate-600 rounded-lg text-sm w-full sm:w-52 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none">
+  <input type="text" name="name" value="{{ name_filter }}" placeholder="Filter Nama..."
+         class="px-3 py-2 border dark:border-slate-600 rounded-lg text-sm w-full sm:w-52 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none">
+  <input type="hidden" name="sort" value="{{ sort }}">
+  <input type="hidden" name="dir" value="{{ dir }}">
+  <button class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-sm shrink-0">Filter</button>
+  {% if pin_filter or name_filter %}
+  <a href="{% url 'iclock:active_device_show_users' device.SN %}"
+     class="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg text-sm text-center shrink-0">Reset</a>
+  {% endif %}
+
+  <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 sm:ml-2 shrink-0">
+    Baris/halaman:
+    <select name="page_size" onchange="this.form.submit()"
+            class="px-2 py-1.5 border dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none">
+      {% for opt in page_size_options %}
+        <option value="{{ opt }}" {% if opt == page_size %}selected{% endif %}>{{ opt }}</option>
+      {% endfor %}
+    </select>
+  </label>
+</form>
+
+<div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 overflow-x-auto">
+  <div class="px-5 py-4 border-b font-semibold">
+    Daftar User di Device ({{ total_count }})
+  </div>
+  <table class="w-full text-xs">
+    <thead class="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 text-left select-none">
+      <tr>
+        <th class="px-3 py-1">
+          <a href="{{ sort_urls.uid }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
+            UID {% if sort == 'uid' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+          </a>
+        </th>
+        <th class="px-3 py-1">
+          <a href="{{ sort_urls.user_id }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
+            User ID {% if sort == 'user_id' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+          </a>
+        </th>
+        <th class="px-3 py-1">
+          <a href="{{ sort_urls.name }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
+            Nama {% if sort == 'name' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+          </a>
+        </th>
+        <th class="px-3 py-1">
+          <a href="{{ sort_urls.privilege }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
+            Privilege {% if sort == 'privilege' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+          </a>
+        </th>
+        <th class="px-3 py-1">
+          <a href="{{ sort_urls.card }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
+            Kartu {% if sort == 'card' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+          </a>
+        </th>
+        <th class="px-3 py-1 text-right">Aksi</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in page_obj %}
+      <tr class="border-t dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/40">
+        <td class="px-3 py-1">{{ u.uid }}</td>
+        <td class="px-3 py-1">{{ u.user_id }}</td>
+        <td class="px-3 py-1 font-medium">{{ u.name }}</td>
+        <td class="px-3 py-1">
+          {% if u.privilege_label == 'Admin' %}
+            <span class="px-2 py-0.5 rounded-full text-xs bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400">Admin</span>
+          {% else %}
+            <span class="px-2 py-0.5 rounded-full text-xs bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">User</span>
+          {% endif %}
+        </td>
+        <td class="px-3 py-1">{{ u.card|default:"-" }}</td>
+        <td class="px-3 py-1 text-right">
+          <details class="row-action-details relative inline-block text-left">
+            <summary class="row-action-toggle-native px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-xs font-medium inline-flex items-center gap-1">
+              Aksi <span class="text-[10px]">▾</span>
+            </summary>
+            <div class="row-action-menu-native absolute right-0 mt-1 w-56 bg-white dark:bg-slate-800 rounded-lg shadow-lg border dark:border-slate-700 py-1 z-30">
+              <a href="{% url 'iclock:active_device_user_transfer_finger' device.SN u.user_id %}"
+                 class="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+                👆 Transfer Data Finger
+              </a>
+              <form action="{% url 'iclock:active_device_user_toggle_privilege' device.SN u.user_id %}" method="post"
+                    onsubmit="return confirm('{% if u.privilege_label == 'Admin' %}Turunkan {{ u.user_id }} jadi User biasa di device ini?{% else %}Jadikan {{ u.user_id }} sebagai Admin di device ini?{% endif %}');">
+                {% csrf_token %}
+                <input type="hidden" name="current_privilege" value="{{ u.privilege }}">
+                <button type="submit" class="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+                  {% if u.privilege_label == 'Admin' %}⬇️ Set as User{% else %}⬆️ Set as Admin{% endif %}
+                </button>
+              </form>
+              <div class="border-t dark:border-slate-700 my-1"></div>
+              <form action="{% url 'iclock:active_device_user_delete' device.SN u.user_id %}" method="post"
+                    onsubmit="return confirm('Hapus user {{ u.user_id }} langsung dari device ini?');">
+                {% csrf_token %}
+                <button type="submit" class="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40">
+                  🗑️ Delete User
+                </button>
+              </form>
+            </div>
+          </details>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6" class="px-5 py-8 text-center text-slate-400 dark:text-slate-500">Tidak ada user di device ini</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% include "partials/pagination.html" %}
+{% endif %}
+{% endblock %}

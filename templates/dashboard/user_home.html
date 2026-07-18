@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Beranda{% endblock %}
+{% block page_title %}Beranda{% endblock %}
+{% block content %}
+<div class="mb-4">
+  <p class="text-sm text-slate-500 dark:text-slate-400">
+    Selamat datang, <strong>{{ user.full_name|default:user.username }}</strong>. Berikut menu yang bisa Anda akses.
+  </p>
+</div>
+
+{% if available_actions %}
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+  {% for action in available_actions %}
+  <a href="{{ action.url }}"
+     class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 p-6 hover:shadow-md hover:border-indigo-300 dark:hover:border-indigo-700 transition flex flex-col items-center text-center gap-2">
+    <div class="text-4xl">{{ action.icon }}</div>
+    <div class="font-semibold text-slate-800 dark:text-slate-100">{{ action.title }}</div>
+    <div class="text-sm text-slate-500 dark:text-slate-400">{{ action.description }}</div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 p-10 text-center text-slate-400 dark:text-slate-500">
+  Anda belum diberi akses ke fitur manapun. Hubungi admin kalau merasa ini keliru.
+</div>
+{% endif %}
+{% endblock %}

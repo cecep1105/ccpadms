@@ -1,0 +1,347 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}Dashboard{% endblock %} · Internal Portal</title>
+<script>
+  // Baca preferensi collapse sidebar SEBELUM body dirender, supaya tidak ada
+  // "flash" (kelihatan expanded sekejap lalu collapse).
+  (function () {
+    try {
+      if (localStorage.getItem('sidebar_collapsed') === '1') {
+        document.documentElement.setAttribute('data-sidebar', 'collapsed');
+      }
+    } catch (e) {}
+  })();
+
+  // Baca preferensi tema (dark/light) SEBELUM body dirender, sama alasannya
+  // dengan sidebar di atas -- cegah "flash" tema salah sekejap saat load.
+  // Default: ikuti preferensi OS user kalau belum pernah pilih manual.
+  (function () {
+    try {
+      const stored = localStorage.getItem('theme');
+      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const isDark = stored ? stored === 'dark' : prefersDark;
+      if (isDark) document.documentElement.classList.add('dark');
+    } catch (e) {}
+  })();
+</script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  // Dark mode berbasis class (bukan cuma media query OS) -- supaya bisa
+  // di-toggle manual lewat dropdown avatar, terlepas dari setting OS.
+  tailwind.config = { darkMode: 'class' };
+</script>
+<link rel="stylesheet" href="{% static 'dashboard/css/style.css' %}">
+</head>
+<body class="bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-200 antialiased">
+<!-- Backdrop mobile: muncul di belakang sidebar saat dibuka di layar kecil -->
+<div id="mobileSidebarBackdrop" class="hidden fixed inset-0 bg-black/50 z-40 lg:hidden"></div>
+
+<div class="min-h-screen flex">
+  <!-- Sidebar -- cuma ditampilkan utk staff/superuser. User non-staff (yang
+       cuma diberi izin fitur terbatas lewat FeaturePermission) diarahkan ke
+       halaman card menu (dashboard/user_home.html), tidak perlu navigasi
+       admin lengkap ini. -->
+  {% if request.user.is_staff or request.user.is_superuser %}
+  <aside id="sidebarPanel"
+         class="sidebar-panel w-64 bg-slate-900 text-slate-200 flex flex-col shrink-0
+                transition-all duration-200 ease-in-out
+                fixed inset-y-0 left-0 z-50 -translate-x-full
+                lg:static lg:translate-x-0 lg:z-auto">
+    <div class="h-16 flex items-center justify-between px-4 border-b border-slate-800">
+      <span class="flex items-center gap-2 overflow-hidden">
+        <span class="text-lg shrink-0">⚡</span>
+        <span class="sidebar-label text-lg font-bold text-white tracking-tight whitespace-nowrap">Internal Portal</span>
+      </span>
+      <!-- Toggle collapse, khusus desktop -->
+      <button id="sidebarToggleBtn" type="button" title="Lipat/bentangkan sidebar"
+              class="hidden lg:flex w-7 h-7 items-center justify-center rounded-lg hover:bg-slate-800 text-slate-400 shrink-0 transition">
+        <span id="sidebarToggleIcon">«</span>
+      </button>
+      <!-- Tombol tutup, khusus mobile -->
+      <button id="mobileSidebarCloseBtn" type="button" title="Tutup menu"
+              class="lg:hidden w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-800 text-slate-300 shrink-0">
+        <span class="text-lg leading-none">✕</span>
+      </button>
+    </div>
+    <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto overflow-x-hidden">
+      {% if user.is_staff or user.is_superuser %}
+      <a href="{% url 'dashboard:admin_home' %}" title="Ringkasan"
+         class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800 transition text-sm
+                {% if request.resolver_match.url_name == 'admin_home' %}bg-slate-800 text-white{% endif %}">
+        <span class="shrink-0">📊</span> <span class="sidebar-label whitespace-nowrap">Ringkasan</span>
+      </a>
+      <a href="{% url 'dashboard:user_list' %}" title="Manajemen User"
+         class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800 transition text-sm
+                {% if request.resolver_match.url_name in 'user_list,user_create,user_edit,user_reset_password' %}bg-slate-800 text-white{% endif %}">
+        <span class="shrink-0">👥</span> <span class="sidebar-label whitespace-nowrap">Manajemen User</span>
+      </a>
+
+      {% with iclock_names='department_list,department_add,department_edit,active_device_list,active_device_add,active_device_edit,registered_device_list,registered_device_add,registered_device_edit,device_user_list,device_user_add,device_user_edit,fingerprint_template_list,fingerprint_template_add,fingerprint_template_edit,transaction_list,transaction_add,transaction_edit,operation_log_list,operation_log_add,operation_log_edit,device_log_list,device_log_add,device_log_edit,device_command_list,device_command_add,device_command_edit,attendance_recap' %}
+      <div>
+        <button type="button" id="iclockMenuToggle"
+                class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800 transition text-sm
+                       {% if request.resolver_match.url_name in iclock_names %}bg-slate-800 text-white{% endif %}">
+          <span class="shrink-0">🖥️</span>
+          <span class="sidebar-label whitespace-nowrap flex-1 text-left">Iclock Management</span>
+          <span id="iclockMenuChevron" class="sidebar-label text-xs transition-transform duration-150"
+                style="{% if request.resolver_match.url_name in iclock_names %}transform: rotate(180deg);{% endif %}">▾</span>
+        </button>
+        <div id="iclockSubmenu" class="{% if request.resolver_match.url_name not in iclock_names %}hidden{% endif %} pl-8 mt-1 space-y-1">
+          <a href="{% url 'iclock:department_list' %}"
+             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+                    {% if request.resolver_match.url_name in 'department_list,department_add,department_edit' %}bg-slate-800 text-white{% endif %}">
+            <span class="sidebar-label whitespace-nowrap">Department</span>
+          </a>
+          <a href="{% url 'iclock:active_device_list' %}"
+             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+                    {% if request.resolver_match.url_name in 'active_device_list,active_device_add,active_device_edit' %}bg-slate-800 text-white{% endif %}">
+            <span class="sidebar-label whitespace-nowrap">Active Device</span>
+          </a>
+          <a href="{% url 'iclock:registered_device_list' %}"
+             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+                    {% if request.resolver_match.url_name in 'registered_device_list,registered_device_add,registered_device_edit' %}bg-slate-800 text-white{% endif %}">
+            <span class="sidebar-label whitespace-nowrap">Registered Device</span>
+          </a>
+          <a href="{% url 'iclock:device_user_list' %}"
+             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+                    {% if request.resolver_match.url_name in 'device_user_list,device_user_add,device_user_edit' %}bg-slate-800 text-white{% endif %}">
+            <span class="sidebar-label whitespace-nowrap">Employee</span>
+          </a>
+          <a href="{% url 'iclock:fingerprint_template_list' %}"
+             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+                    {% if request.resolver_match.url_name in 'fingerprint_template_list,fingerprint_template_add,fingerprint_template_edit' %}bg-slate-800 text-white{% endif %}">
+            <span class="sidebar-label whitespace-nowrap">Fingerprint Template</span>
+          </a>
+          <a href="{% url 'iclock:transaction_list' %}"
+             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+                    {% if request.resolver_match.url_name in 'transaction_list,transaction_add,transaction_edit' %}bg-slate-800 text-white{% endif %}">
+            <span class="sidebar-label whitespace-nowrap">Transaction</span>
+          </a>
+          <a href="{% url 'iclock:operation_log_list' %}"
+             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+                    {% if request.resolver_match.url_name in 'operation_log_list,operation_log_add,operation_log_edit' %}bg-slate-800 text-white{% endif %}">
+            <span class="sidebar-label whitespace-nowrap">Operation Log</span>
+          </a>
+          <a href="{% url 'iclock:device_log_list' %}"
+             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+                    {% if request.resolver_match.url_name in 'device_log_list,device_log_add,device_log_edit' %}bg-slate-800 text-white{% endif %}">
+            <span class="sidebar-label whitespace-nowrap">Device Log</span>
+          </a>
+          <a href="{% url 'iclock:device_command_list' %}"
+             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+                    {% if request.resolver_match.url_name in 'device_command_list,device_command_add,device_command_edit' %}bg-slate-800 text-white{% endif %}">
+            <span class="sidebar-label whitespace-nowrap">Device Command</span>
+          </a>
+          <a href="{% url 'iclock:attendance_recap' %}"
+             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+                    {% if request.resolver_match.url_name == 'attendance_recap' %}bg-slate-800 text-white{% endif %}">
+            <span class="sidebar-label whitespace-nowrap">Attendance Recap</span>
+          </a>
+        </div>
+      </div>
+      {% endwith %}
+      {% endif %}
+
+      {% if user.is_staff or user.is_superuser %}
+      <div>
+        <button type="button" id="mclockMenuToggle"
+                class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800 transition text-sm
+                       {% if request.resolver_match.app_name == 'mclock' %}bg-slate-800 text-white{% endif %}">
+          <span class="shrink-0">📱</span>
+          <span class="sidebar-label whitespace-nowrap flex-1 text-left">Mobile Attendance</span>
+          <span id="mclockMenuChevron" class="sidebar-label text-xs transition-transform duration-150"
+                style="{% if request.resolver_match.app_name == 'mclock' %}transform: rotate(180deg);{% endif %}">▾</span>
+        </button>
+        <div id="mclockSubmenu" class="{% if request.resolver_match.app_name != 'mclock' %}hidden{% endif %} pl-8 mt-1 space-y-1">
+          <a href="{% url 'mclock:mobile_attendance_table' 'karyawan-mobile' %}"
+             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+                    {% if request.resolver_match.kwargs.slug == 'karyawan-mobile' %}bg-slate-800 text-white{% endif %}">
+            <span class="sidebar-label whitespace-nowrap">Karyawan Mobile</span>
+          </a>
+          <a href="{% url 'mclock:mobile_attendance_table' 'driver-mobile' %}"
+             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+                    {% if request.resolver_match.kwargs.slug == 'driver-mobile' %}bg-slate-800 text-white{% endif %}">
+            <span class="sidebar-label whitespace-nowrap">Driver Mobile</span>
+          </a>
+          <a href="{% url 'mclock:mobile_attendance_table' 'mitra-mobile' %}"
+             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+                    {% if request.resolver_match.kwargs.slug == 'mitra-mobile' %}bg-slate-800 text-white{% endif %}">
+            <span class="sidebar-label whitespace-nowrap">Mitra Mobile</span>
+          </a>
+          <a href="{% url 'mclock:mobile_attendance_table' 'kantin-mobile' %}"
+             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+                    {% if request.resolver_match.kwargs.slug == 'kantin-mobile' %}bg-slate-800 text-white{% endif %}">
+            <span class="sidebar-label whitespace-nowrap">Kantin Mobile</span>
+          </a>
+          <a href="{% url 'mclock:mobile_attendance_table' 'kantin-mitra-mobile' %}"
+             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+                    {% if request.resolver_match.kwargs.slug == 'kantin-mitra-mobile' %}bg-slate-800 text-white{% endif %}">
+            <span class="sidebar-label whitespace-nowrap">Kantin Mitra Mobile</span>
+          </a>
+          <a href="{% url 'mclock:mobile_pool_list' %}"
+             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+                    {% if request.resolver_match.url_name == 'mobile_pool_list' %}bg-slate-800 text-white{% endif %}">
+            <span class="sidebar-label whitespace-nowrap">Mobile Pool</span>
+          </a>
+          <a href="{% url 'mclock:mobile_pool_loc_list' %}"
+             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+                    {% if request.resolver_match.url_name == 'mobile_pool_loc_list' %}bg-slate-800 text-white{% endif %}">
+            <span class="sidebar-label whitespace-nowrap">Mobile Pool Location</span>
+          </a>
+          <a href="{% url 'mclock:pool_device_function_list' %}"
+             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+                    {% if request.resolver_match.url_name == 'pool_device_function_list' or request.resolver_match.url_name == 'pool_device_function_add' or request.resolver_match.url_name == 'pool_device_function_edit' %}bg-slate-800 text-white{% endif %}">
+            <span class="sidebar-label whitespace-nowrap">Pool Device Function</span>
+          </a>
+        </div>
+      </div>
+
+      <a href="{% url 'mattendance:checkin_test_page' %}"
+         class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800 transition text-sm
+                {% if request.resolver_match.url_name == 'checkin_test_page' %}bg-slate-800 text-white{% endif %}">
+        <span class="shrink-0">📍</span> <span class="sidebar-label whitespace-nowrap">Check-in/Out (GPS)</span>
+      </a>
+      <a href="{% url 'mattendance:checkin_meal_page' %}"
+         class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800 transition text-sm
+                {% if request.resolver_match.url_name == 'checkin_meal_page' %}bg-slate-800 text-white{% endif %}">
+        <span class="shrink-0">🍽️</span> <span class="sidebar-label whitespace-nowrap">Check/Meal</span>
+      </a>
+      <a href="{% url 'mattendance:face_enroll_page' %}"
+         class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800 transition text-sm
+                {% if request.resolver_match.url_name == 'face_enroll_page' %}bg-slate-800 text-white{% endif %}">
+        <span class="shrink-0">🙂</span> <span class="sidebar-label whitespace-nowrap">Enrollment Wajah</span>
+      </a>
+      <a href="{% url 'mattendance:attendance_log_list' %}"
+         class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800 transition text-sm
+                {% if request.resolver_match.url_name == 'attendance_log_list' %}bg-slate-800 text-white{% endif %}">
+        <span class="shrink-0">📋</span> <span class="sidebar-label whitespace-nowrap">Log Absensi GPS</span>
+      </a>
+      <a href="{% url 'mattendance:face_profile_admin_list' %}"
+         class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800 transition text-sm
+                {% if request.resolver_match.url_name == 'face_profile_admin_list' %}bg-slate-800 text-white{% endif %}">
+        <span class="shrink-0">🔒</span> <span class="sidebar-label whitespace-nowrap">Face Profile</span>
+      </a>
+      {% endif %}
+    </nav>
+    <div class="p-4 border-t border-slate-800">
+      <form action="{% url 'accounts:logout' %}" method="post">
+        {% csrf_token %}
+        <button type="submit" title="Logout"
+                class="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-slate-800 hover:bg-rose-600 transition text-sm">
+          <span class="shrink-0">🚪</span> <span class="sidebar-label whitespace-nowrap">Logout</span>
+        </button>
+      </form>
+    </div>
+  </aside>
+  {% endif %}
+
+  <!-- Main -->
+  <div class="flex-1 flex flex-col min-w-0">
+    <header class="h-16 bg-white dark:bg-slate-900 border-b dark:border-slate-800 flex items-center justify-between px-4 lg:px-6 shrink-0 relative gap-3">
+      <div class="flex items-center gap-2 min-w-0">
+        {% if request.user.is_staff or request.user.is_superuser %}
+        <button id="mobileSidebarOpenBtn" type="button" title="Buka menu"
+                class="lg:hidden w-9 h-9 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0">
+          <span class="text-xl leading-none">☰</span>
+        </button>
+        {% endif %}
+        <h1 class="text-lg font-semibold truncate">{% block page_title %}{% endblock %}</h1>
+      </div>
+
+      <div class="relative shrink-0">
+        <button id="userMenuBtn" type="button"
+                class="flex items-center gap-2 sm:gap-3 px-2 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+          <div class="text-right hidden sm:block">
+            <div class="text-sm font-medium">{{ user.full_name }}</div>
+            <div class="text-xs text-slate-400">
+              {% if user.auth_source == 'ldap' %}LDAP{% else %}Local{% endif %}
+              {% if user.is_superuser %} · Super Admin{% elif user.is_staff %} · Admin{% endif %}
+            </div>
+          </div>
+          <div class="w-9 h-9 rounded-full bg-indigo-600 text-white flex items-center justify-center font-semibold shrink-0">
+            {{ user.username|slice:':1'|upper }}
+          </div>
+          <span class="text-slate-400 text-xs hidden sm:inline">▾</span>
+        </button>
+
+        <div id="userMenuDropdown"
+             class="hidden absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 rounded-xl shadow-lg border dark:border-slate-700 py-2 z-20">
+          <div class="px-4 py-2 border-b dark:border-slate-700">
+            <div class="text-sm font-medium">{{ user.full_name }}</div>
+            <div class="text-xs text-slate-400">@{{ user.username }}</div>
+          </div>
+          {% if not request.user.is_staff and not request.user.is_superuser %}
+          <a href="{% url 'dashboard:user_home' %}"
+             class="flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700
+                    {% if request.resolver_match.url_name == 'user_home' %}text-indigo-600 dark:text-indigo-400 font-medium{% endif %}">
+            🏠 Beranda
+          </a>
+          {% endif %}
+          <a href="{% url 'dashboard:profile' %}"
+             class="flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700
+                    {% if request.resolver_match.url_name == 'profile' %}text-indigo-600 dark:text-indigo-400 font-medium{% endif %}">
+            🙍 Profil Saya
+          </a>
+          <a href="{% url 'dashboard:profile_change_password' %}"
+             class="flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700
+                    {% if request.resolver_match.url_name == 'profile_change_password' %}text-indigo-600 dark:text-indigo-400 font-medium{% endif %}">
+            🔒 Ubah Password
+          </a>
+          <div class="border-t dark:border-slate-700 my-1"></div>
+          <button type="button" id="themeToggleBtn"
+                  class="w-full text-left flex items-center justify-between gap-2 px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700">
+            <span class="flex items-center gap-2">
+              <span id="themeToggleIcon">🌙</span>
+              <span id="themeToggleLabel">Dark Mode</span>
+            </span>
+            <span id="themeToggleSwitch"
+                  class="relative inline-block w-9 h-5 rounded-full bg-slate-300 dark:bg-indigo-600 transition-colors">
+              <span id="themeToggleKnob"
+                    class="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform dark:translate-x-4"></span>
+            </span>
+          </button>
+          <div class="border-t dark:border-slate-700 my-1"></div>
+          <form action="{% url 'accounts:logout' %}" method="post">
+            {% csrf_token %}
+            <button type="submit"
+                    class="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40">
+              🚪 Logout
+            </button>
+          </form>
+        </div>
+      </div>
+    </header>
+
+    <main class="flex-1 p-4 lg:p-6 overflow-y-auto">
+      {% if messages %}
+      <div class="flash-messages mb-4 space-y-2">
+        {% for message in messages %}
+        <div class="px-4 py-3 rounded-lg text-sm border
+          {% if message.tags == 'error' %}bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800
+          {% elif message.tags == 'success' %}bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800
+          {% else %}bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700{% endif %}">
+          {{ message }}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+<!-- Overlay loading global -- dipakai link/aksi yang butuh waktu (mis. konek ke device fisik) -->
+<div id="globalLoadingOverlay" class="hidden fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center">
+  <div class="bg-white rounded-xl shadow-2xl p-8 max-w-sm w-full mx-4 text-center">
+    <div class="spinner mx-auto mb-4"></div>
+    <div class="font-semibold text-slate-800">Memuat...</div>
+    <p class="text-sm text-slate-500 mt-1">Menghubungi device, mohon tunggu sebentar.</p>
+  </div>
+</div>
+
+<script src="{% static 'dashboard/js/app.js' %}"></script>
+</body>
+</html>

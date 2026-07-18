@@ -1,0 +1,165 @@
+{% extends "mattendance/mobile_app_base.html" %}
+{% block title %}Absen{% endblock %}
+{% block content %}
+
+{% if not has_face_profile %}
+<div class="mb-4 p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-sm text-amber-800 dark:text-amber-300 flex items-start gap-2">
+  <span class="text-lg shrink-0">⚠️</span>
+  <span>Anda belum mendaftarkan wajah. <a href="{% url 'mattendance:face_enroll_page' %}" class="underline font-semibold">Daftar wajah dulu di sini</a> sebelum bisa absen.</span>
+</div>
+{% endif %}
+
+<div class="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 p-4 mb-4">
+  <div class="relative bg-slate-900 rounded-2xl overflow-hidden" style="aspect-ratio: 3/4;">
+    <video id="video" autoplay playsinline muted class="w-full h-full object-cover"></video>
+    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+      <div class="w-40 h-48 border-4 border-white/40 rounded-[50%]"></div>
+    </div>
+  </div>
+  <canvas id="canvas" class="hidden"></canvas>
+  <p class="text-center text-xs text-slate-400 dark:text-slate-500 mt-3">Posisikan wajah Anda di dalam bingkai</p>
+</div>
+
+<div id="statusBox" class="hidden rounded-2xl p-4 text-sm mb-4 text-center font-medium"></div>
+<div id="coordsBox" class="hidden mb-4 text-center text-xs text-slate-300 dark:text-slate-600 font-mono"></div>
+
+<div class="grid grid-cols-2 gap-3">
+  <button type="button" id="checkinBtn" {% if not has_face_profile %}disabled{% endif %}
+          class="flex flex-col items-center justify-center gap-1 py-5 bg-emerald-500 hover:bg-emerald-600 active:scale-[0.97] text-white rounded-3xl font-bold shadow-lg shadow-emerald-500/20 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100">
+    <span class="text-2xl">✅</span>
+    <span>Check-in</span>
+  </button>
+  <button type="button" id="checkoutBtn" {% if not has_face_profile %}disabled{% endif %}
+          class="flex flex-col items-center justify-center gap-1 py-5 bg-amber-500 hover:bg-amber-600 active:scale-[0.97] text-white rounded-3xl font-bold shadow-lg shadow-amber-500/20 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100">
+    <span class="text-2xl">🚪</span>
+    <span>Check-out</span>
+  </button>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  const statusBox = document.getElementById('statusBox');
+  const coordsBox = document.getElementById('coordsBox');
+  const checkinBtn = document.getElementById('checkinBtn');
+  const checkoutBtn = document.getElementById('checkoutBtn');
+  const hasFaceProfile = {{ has_face_profile|yesno:"true,false" }};
+
+  function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+    return '';
+  }
+
+  function showStatus(message, isSuccess) {
+    statusBox.classList.remove('hidden', 'bg-emerald-50', 'dark:bg-emerald-950/30', 'text-emerald-700', 'dark:text-emerald-400', 'bg-rose-50', 'dark:bg-rose-950/30', 'text-rose-700', 'dark:text-rose-400');
+    if (isSuccess) {
+      statusBox.classList.add('bg-emerald-50', 'dark:bg-emerald-950/30', 'text-emerald-700', 'dark:text-emerald-400');
+    } else {
+      statusBox.classList.add('bg-rose-50', 'dark:bg-rose-950/30', 'text-rose-700', 'dark:text-rose-400');
+    }
+    statusBox.textContent = message;
+  }
+
+  function setButtonsDisabled(disabled) {
+    checkinBtn.disabled = disabled || !hasFaceProfile;
+    checkoutBtn.disabled = disabled || !hasFaceProfile;
+  }
+
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
+      .then((stream) => { video.srcObject = stream; })
+      .catch((err) => showStatus('Gagal mengakses kamera: ' + err.message, false));
+  } else {
+    showStatus('Browser Anda tidak mendukung akses kamera.', false);
+  }
+
+  function stopCamera() {
+    // Matikan stream kamera setelah check-in/out berhasil -- tidak perlu
+    // lagi menampilkan video begitu prosesnya selesai.
+    if (video.srcObject) {
+      video.srcObject.getTracks().forEach((track) => track.stop());
+      video.srcObject = null;
+    }
+  }
+
+  function captureFaceImage() {
+    if (!video.videoWidth) return null;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    return canvas.toDataURL('image/jpeg', 0.9);
+  }
+
+  function doCheck(checkType) {
+    if (!hasFaceProfile) {
+      showStatus('Anda belum mendaftarkan wajah -- daftar dulu sebelum absen.', false);
+      return;
+    }
+    if (!navigator.geolocation) {
+      showStatus('Browser Anda tidak mendukung layanan lokasi.', false);
+      return;
+    }
+    const faceImage = captureFaceImage();
+    if (!faceImage) {
+      showStatus('Kamera belum siap, coba lagi sebentar.', false);
+      return;
+    }
+
+    setButtonsDisabled(true);
+    showStatus('Memverifikasi lokasi & wajah...', true);
+    coordsBox.classList.add('hidden');
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude;
+        const lon = position.coords.longitude;
+        coordsBox.textContent = `${lat.toFixed(6)}, ${lon.toFixed(6)} (±${Math.round(position.coords.accuracy)}m)`;
+        coordsBox.classList.remove('hidden');
+
+        const formData = new FormData();
+        formData.append('latitude', lat);
+        formData.append('longitude', lon);
+        formData.append('check_type', checkType);
+        formData.append('face_image', faceImage);
+
+        fetch('{% url "mattendance:checkin_submit" %}', {
+          method: 'POST',
+          headers: { 'X-CSRFToken': getCookie('csrftoken') },
+          body: formData,
+        })
+          .then((r) => r.json())
+          .then((data) => {
+            showStatus(data.message, data.success);
+            setButtonsDisabled(false);
+            if (data.success) {
+              stopCamera();
+              setTimeout(() => { window.location.href = '{% url "mattendance:attendance_history_page" %}'; }, 1200);
+            }
+            if (data.needs_enrollment) {
+              setTimeout(() => { window.location.href = '{% url "mattendance:face_enroll_page" %}'; }, 2000);
+            }
+          })
+          .catch(() => {
+            showStatus('Gagal menghubungi server.', false);
+            setButtonsDisabled(false);
+          });
+      },
+      (error) => {
+        showStatus('Gagal mengambil lokasi: ' + error.message, false);
+        setButtonsDisabled(false);
+      },
+      { enableHighAccuracy: true, timeout: 15000 }
+    );
+  }
+
+  checkinBtn.addEventListener('click', () => doCheck('IN'));
+  checkoutBtn.addEventListener('click', () => doCheck('OUT'));
+});
+</script>
+{% endblock %}

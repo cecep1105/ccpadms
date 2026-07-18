@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Operation Log{% endblock %}
+{% block page_title %}Operation Log{% endblock %}
+{% block content %}
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+  <form method="get" class="flex gap-2">
+    <input type="text" name="q" value="{{ search }}" placeholder="Cari serial number device..."
+           class="px-3 py-2 border dark:border-slate-600 rounded-lg text-sm w-72 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none">
+    <button class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-sm">Cari</button>
+  </form>
+  <a href="{% url 'iclock:operation_log_add' %}"
+     class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium text-center">
+    + Tambah Operation Log
+  </a>
+</div>
+
+<div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 overflow-x-auto">
+  <table class="w-full text-xs">
+    <thead class="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 text-left">
+      <tr>
+        <th class="px-3 py-1">Device</th>
+        <th class="px-3 py-1">Admin</th>
+        <th class="px-3 py-1">Operasi</th>
+        <th class="px-3 py-1">Waktu</th>
+        <th class="px-3 py-1">Object</th>
+        <th class="px-3 py-1 text-right">Aksi</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for l in page_obj %}
+      <tr class="border-t dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/40">
+        <td class="px-3 py-1 font-medium">{{ l.SN|default:"-" }}</td>
+        <td class="px-3 py-1">{{ l.admin }}</td>
+        <td class="px-3 py-1">{{ l.op_name }} <span class="text-slate-400 dark:text-slate-500">({{ l.OP }})</span></td>
+        <td class="px-3 py-1">{{ l.OPTime|date:"d M Y H:i:s" }}</td>
+        <td class="px-3 py-1">{{ l.Object|default:"-" }}</td>
+        <td class="px-3 py-1">
+          <div class="flex justify-end gap-2 text-xs">
+            <a href="{% url 'iclock:operation_log_edit' l.pk %}" class="px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600">Edit</a>
+            <form action="{% url 'iclock:operation_log_delete' l.pk %}" method="post"
+                  onsubmit="return confirm('Hapus operation log ini secara permanen?');">
+              {% csrf_token %}
+              <button class="px-2.5 py-1.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/40">Hapus</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6" class="px-5 py-8 text-center text-slate-400 dark:text-slate-500">Belum ada operation log</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% include "partials/pagination.html" %}
+{% endblock %}

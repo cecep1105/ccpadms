@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}{% if mode == 'create' %}Tambah User{% else %}Edit User{% endif %}{% endblock %}
+{% block page_title %}{% if mode == 'create' %}Tambah User Lokal{% else %}Edit User: {{ target.username }}{% endif %}{% endblock %}
+{% block content %}
+<div class="max-w-lg bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 p-6">
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    {% if mode == 'create' %}
+    <div>
+      <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Username</label>
+      {{ form.username }}
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Password</label>
+      {{ form.password }}
+    </div>
+    {% endif %}
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nama Depan</label>
+        {{ form.first_name }}
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nama Belakang</label>
+        {{ form.last_name }}
+      </div>
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Email</label>
+      {{ form.email }}
+    </div>
+    <div class="relative" id="empAutocompleteWrapper">
+      <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Employee (opsional)</label>
+      <input type="text" id="empSearchInput" autocomplete="off" placeholder="Ketik PIN atau nama karyawan..."
+             value="{{ current_employee_label|default:'' }}"
+             class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none">
+      {{ form.emp_id }}
+      <div id="empSuggestions" class="hidden absolute z-10 w-full bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-lg shadow-lg mt-1 max-h-48 overflow-y-auto"></div>
+      <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">Kaitkan akun ini dengan data Employee di iclock (opsional). Kosongkan kalau tidak ada.</p>
+      {% if form.emp_id.errors %}<p class="text-xs text-rose-600 dark:text-rose-400 mt-1">{{ form.emp_id.errors.0 }}</p>{% endif %}
+    </div>
+    {% if mode == 'edit' %}
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Telepon</label>
+        {{ form.phone_number }}
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Departemen</label>
+        {{ form.department }}
+      </div>
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Jabatan</label>
+      {{ form.title }}
+    </div>
+    {% endif %}
+    {% if mode == 'create' %}
+    <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+      {{ form.is_staff }} Jadikan Admin
+    </label>
+    {% endif %}
+    {% if form.errors %}
+    <div class="text-sm text-rose-600 dark:text-rose-400">Periksa kembali data yang dimasukkan.</div>
+    {% endif %}
+    <div class="flex gap-2 pt-2">
+      <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium">Simpan</button>
+      <a href="{% url 'dashboard:user_list' %}" class="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg text-sm">Batal</a>
+    </div>
+  </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  // Autocomplete Employee -- reuse endpoint iclock:ajax_employee_search
+  // (pola sama dgn PIN autocomplete di Attendance Recap). Kotak yg terlihat
+  // murni UI pencarian; nilai sungguhan yg disubmit ada di hidden field
+  // 'emp_id' (id_emp_id), diisi otomatis saat 1 saran diklik.
+  const empSearchInput = document.getElementById('empSearchInput');
+  const empHiddenInput = document.getElementById('id_emp_id');
+  const empSuggestions = document.getElementById('empSuggestions');
+  let empDebounce;
+  if (empSearchInput && empHiddenInput && empSuggestions) {
+    empSearchInput.addEventListener('input', () => {
+      empHiddenInput.value = ''; // reset -- user ngetik ulang manual, bukan pilih lagi dari saran
+      clearTimeout(empDebounce);
+      const q = empSearchInput.value.trim();
+      if (q.length < 2) {
+        empSuggestions.classList.add('hidden');
+        empSuggestions.innerHTML = '';
+        return;
+      }
+      empDebounce = setTimeout(() => {
+        fetch('{% url "iclock:ajax_employee_search" %}?q=' + encodeURIComponent(q))
+          .then((r) => r.json())
+          .then((data) => {
+            empSuggestions.innerHTML = '';
+            const list = data.employees || [];
+            if (!list.length) {
+              empSuggestions.classList.add('hidden');
+              return;
+            }
+            list.forEach((emp) => {
+              const item = document.createElement('div');
+              item.className = 'px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer text-sm';
+              item.textContent = emp.pin + ' - ' + emp.name;
+              item.addEventListener('click', () => {
+                empSearchInput.value = emp.pin + ' - ' + emp.name;
+                empHiddenInput.value = emp.pin;
+                empSuggestions.classList.add('hidden');
+              });
+              empSuggestions.appendChild(item);
+            });
+            empSuggestions.classList.remove('hidden');
+          })
+          .catch(() => {});
+      }, 300);
+    });
+
+    document.addEventListener('click', (event) => {
+      if (!event.target.closest('#empAutocompleteWrapper')) {
+        empSuggestions.classList.add('hidden');
+      }
+    });
+  }
+});
+</script>
+{% endblock %}
