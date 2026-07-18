@@ -8,3 +8,8 @@ media/
 venv/
 *.egg-info/
 .DS_Store
+data/
+tmp/
+masterlogother/
+
+
