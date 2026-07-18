@@ -415,9 +415,3 @@ bukan modifikasi ke `zk_client.py`.
 
 ---
 
-## 8. Selanjutnya
-
-Menunggu Anda attach **script "Device Emulation" (Python 2.6)** untuk dijadikan bahan tambahan —
-akan berguna untuk memverifikasi asumsi resume ini terhadap implementasi yang SUDAH PERNAH berjalan
-(sekaligus lihat pola/gotcha yang mereka temukan sendiri saat itu), sebelum kita mulai desain
-endpoint & model barunya di `iclock`.
