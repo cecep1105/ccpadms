@@ -312,6 +312,10 @@ class RegisteredDevice(models.Model):
     """Registered Device -- daftar master device yang diizinkan terdaftar."""
 
     SN = models.CharField(_('Serial Number'), max_length=20, unique=True)
+    Alias = models.CharField(
+        _('Alias'), max_length=20, null=True, blank=True,
+        help_text=_('Diisi otomatis dgn IP Address saat device auto-registrasi (Rule 2a) -- admin bisa ubah manual nanti.'),
+    )
     DeviceName = models.CharField(_('Device Name'), max_length=30, null=True, blank=True)
     DeptID = models.ForeignKey(
         department, db_column='DeptID', verbose_name=_('Pool'),

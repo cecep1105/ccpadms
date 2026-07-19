@@ -67,3 +67,85 @@ def append_attlog_line(sn: str, pin: str, timestamp: datetime, check_type: str) 
     line = f"{sn},{pin},{timestamp.strftime('%d/%m/%Y %H:%M')},{check_type}\n"
     _append_line_locked(path, line)
     return path, pin_valid
+
+
+# ---------------------------------------------------------------------------
+# OPLOG & FPLOG -- BELUM ada implementasi/sample konkret dari Anda (beda dgn
+# ATTLOG yang sudah tervalidasi lewat test/062026.zip), jadi formatnya saya
+# rancang MIRIP ATTLOG (CSV sederhana per baris) sesuai arahan Anda, TAPI
+# TETAP menyimpan payload MENTAH (tab-separated, format asli protokol PUSH
+# SDK -- lihat resume protokol §4.2) sbg kolom terakhir. Alasan: OPERLOG
+# device punya 2 BENTUK berbeda ('USER ...' info karyawan, 'OPLOG ...' log
+# aksi admin) yang field-nya beda total -- daripada memaksa 1 struktur CSV
+# kaku yang berisiko kehilangan informasi, payload asli disimpan APA
+# ADANYA supaya task Celery (tahap berikutnya) bisa parse persis sesuai
+# kebutuhan msg-masing tipe, MIRIP `lineToUser()`/`lineToOpLog()` di
+# test/devview.py Anda -- cuma parsing-nya dipindah ke tahap Celery, bukan
+# di sini (di sini cuma soal PENYIMPANAN text file dulu).
+# ---------------------------------------------------------------------------
+def _extract_pin_from_operlog_fields(tag: str, fields: str) -> str:
+    """
+    Ambil nilai PIN dari payload 'USER PIN=982\\tName=...' atau
+    'FP PIN=982\\tFID=...' (format `Key=Value` dipisah tab, lihat resume
+    protokol §4.2). Return '' kalau tidak ketemu (mis. tag 'OPLOG' yang
+    memang tidak selalu punya field PIN -- lihat catatan di
+    `append_oplog_line`).
+    """
+    for item in fields.split('\t'):
+        if item.startswith('PIN='):
+            return item[len('PIN='):]
+    return ''
+
+
+def append_oplog_line(sn: str, tag: str, fields: str, timestamp: datetime) -> tuple[Path, bool]:
+    """
+    Tulis 1 baris OPERLOG (sub-tipe 'USER' info karyawan ATAU 'OPLOG' log
+    aksi admin) ke text file harian -- format: 'SN,Tag,PIN,ReceivedAt,RawFields'.
+
+    - `tag`: 'USER' atau 'OPLOG' (dari line device, lihat resume protokol §4.2).
+    - `fields`: payload tab-separated APA ADANYA (bukan 'USER '/'OPLOG '
+      lagi, tag-nya sudah dipisah) -- disimpan mentah, BUKAN diparsing
+      penuh di sini.
+
+    Validasi PIN (Rule 3) HANYA relevan utk tag 'USER' (punya field PIN=
+    yang jelas). Tag 'OPLOG' (log aksi admin: power on/off, alarm, ubah
+    config, dst) TIDAK selalu terkait 1 PIN karyawan spesifik -- SENGAJA
+    selalu dianggap valid (tidak pernah masuk folder '_other'), karena
+    Rule 3 secara semantik soal validasi PIN KARYAWAN, bukan data admin.
+    """
+    if tag == 'USER':
+        pin = _extract_pin_from_operlog_fields(tag, fields)
+        pin_valid = is_valid_device_pin(pin)
+    else:  # 'OPLOG' (atau tag tak dikenal lainnya) -- tidak ada konsep PIN yang applicable
+        pin = ''
+        pin_valid = True
+
+    path = _log_file_path('masteroplog', pin_valid, timestamp)
+    line = f"{sn},{tag},{pin},{timestamp.strftime('%d/%m/%Y %H:%M:%S')},{fields}\n"
+    _append_line_locked(path, line)
+    return path, pin_valid
+
+
+def append_fplog_line(sn: str, fields: str, timestamp: datetime) -> tuple[Path, bool]:
+    """
+    Tulis 1 baris FP (template fingerprint/face) ke text file harian --
+    format: 'SN,PIN,FID,ReceivedAt,RawFields' (RawFields tetap menyimpan
+    'Valid=...\\tTMP=...' mentah, termasuk template base64-nya, supaya
+    task Celery nanti bisa langsung pakai tanpa perlu tulis ulang ke text
+    file lain).
+
+    `fields` adalah payload SETELAH tag 'FP ' dibuang, mis.
+    'PIN=982\\tFID=1\\tValid=1\\tTMP=ocoRgZ...'.
+    """
+    pin = _extract_pin_from_operlog_fields('FP', fields)
+    fid = ''
+    for item in fields.split('\t'):
+        if item.startswith('FID='):
+            fid = item[len('FID='):]
+            break
+
+    pin_valid = is_valid_device_pin(pin)
+    path = _log_file_path('masterfplog', pin_valid, timestamp)
+    line = f"{sn},{pin},{fid},{timestamp.strftime('%d/%m/%Y %H:%M:%S')},{fields}\n"
+    _append_line_locked(path, line)
+    return path, pin_valid
