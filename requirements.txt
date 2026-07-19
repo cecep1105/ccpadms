@@ -45,3 +45,8 @@ Pillow>=10.0
 # sama dengan Channels (config/settings.py sudah diatur pakai DB index beda).
 celery>=5.3
 redis>=5.0  # client Python utk Celery bicara ke Redis broker
+
+# iclock PUSH SDK -- file locking lintas platform (Windows & Linux) utk
+# tulis text file harian (masterattlog/dst) yang bisa ditulis BERSAMAAN
+# oleh banyak device sekaligus. Lihat iclock/pushsdk_writer.py & test/myrule.md.
+portalocker>=2.8

@@ -48,6 +48,40 @@ def normalize_pin(raw_pin) -> str:
     return raw_pin
 
 
+def get_raw_device_pin(padded_pin: str) -> str:
+    """
+    Kebalikan dari `normalize_pin()` -- buang leading zero padding,
+    kembalikan PIN "asli" sesuai yang device kirim (padanan `devicePIN()`
+    di test/utils.py Anda). SENGAJA tidak pernah mengembalikan string
+    kosong -- loop cuma sampai index -1 (bukan index terakhir), jadi kalau
+    PIN semua nol (kasus ekstrem), minimal 1 karakter terakhir tetap
+    dikembalikan -- perilaku ini DIPERTAHANKAN PERSIS dari implementasi
+    legacy Anda (bukan kebetulan/bug).
+    """
+    if not padded_pin:
+        return padded_pin
+    i = 0
+    for c in padded_pin[:-1]:
+        if c == '0':
+            i += 1
+        else:
+            break
+    return padded_pin[i:]
+
+
+def is_valid_device_pin(raw_or_padded_pin: str) -> bool:
+    """
+    Rule 3 (test/myrule.md): PIN dari device dianggap VALID kalau, setelah
+    leading zero padding dibuang (`get_raw_device_pin`), panjangnya 7 ATAU
+    8 digit (semua angka). Dipakai menentukan apakah data attendance/
+    oplog/fplog device ini masuk 'masterattlog' (diproses normal + celery
+    task tulis DB) atau 'masterattlog_other' (cuma dicatat text file,
+    TIDAK ditulis ke DB) -- lihat Rule 4 (bagian tahap berikutnya).
+    """
+    stripped = get_raw_device_pin(raw_or_padded_pin or '')
+    return stripped.isdigit() and len(stripped) in (7, 8)
+
+
 def activate_device_to_iclock(registered_device: RegisteredDevice) -> bool:
     """
     Copy record dari RegisteredDevice ke iclock (Active Device), kalau SN-nya

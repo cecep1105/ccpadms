@@ -118,6 +118,7 @@ class department(models.Model):
         verbose_name = _('Pool')
         verbose_name_plural = _('Pool')
 
+
     def __str__(self):
         return self.DeptName
 
@@ -147,10 +148,58 @@ class iclock(models.Model):
     # Kolom berikut NOT NULL di tabel `iclock` yang sebenarnya tapi memang
     # editable=False juga di file asli Anda -- diberi default supaya INSERT
     # tidak gagal.
-    TransInterval = models.IntegerField(default=1, editable=False)
-    UpdateDB = models.CharField(max_length=10, default='1111111100', editable=False)
+    TransInterval = models.IntegerField(
+        _('Trans Interval'), default=1,
+        help_text=_('Interval (menit) device mengecek & mengirim data baru ke server.'),
+    )
+    UpdateDB = models.CharField(
+        max_length=10, default='1111111100', editable=False,
+        help_text=_(
+            "Ini field 'TransFlag' versi lama (nama kolom asli tabel ZKTeco) -- menentukan tipe data "
+            "apa saja yang di-auto-upload device (attendance/operation log/foto/dst). Lihat resume "
+            "protokol PUSH SDK bagian 3.1 utk arti tiap karakter."
+        ),
+    )
     LockFunOn = models.SmallIntegerField(db_column='AccFun', default=0, editable=False)
     DelTag = models.SmallIntegerField(default=0, editable=False)
+
+    # --- Field konfigurasi PUSH SDK per-device (baru, lihat test/myrule.md
+    # poin 2) -- dikirim ke device sbg respons GET /iclock/cdata?options=all
+    # begitu device pertama kali konek/start. SENGAJA dibuat per-device
+    # (bukan settings.py global spt implementasi lama Anda) supaya bisa
+    # dikustomisasi per-SN dari dashboard admin.
+    LogStamp = models.CharField(
+        _('Attendance Log Stamp'), max_length=20, null=True, blank=True, default='0',
+        help_text=_("Timestamp terakhir ATTLOG yang sudah diupload device ini (protokol lama: 'Stamp', baru: 'ATTLOGStamp')."),
+    )
+    OpLogStamp = models.CharField(
+        _('Operation Log Stamp'), max_length=20, null=True, blank=True, default='0',
+        help_text=_("Timestamp terakhir OPERLOG (user/fingerprint/log) yang sudah diupload ('OpStamp'/'OPERLOGStamp')."),
+    )
+    PhotoStamp = models.CharField(
+        _('Photo Stamp'), max_length=20, null=True, blank=True, default='0',
+        help_text=_("Timestamp terakhir foto attendance yang sudah diupload ('PhotoStamp'/'ATTPHOTOStamp')."),
+    )
+    TransTimes = models.CharField(
+        _('Trans Times'), max_length=50, null=True, blank=True, default='00:00;14:05',
+        help_text=_("Jadwal cek transfer data (format menit 24-jam, maks 10 slot dipisah ';'). Cuma dipakai kalau Realtime=0 & TransInterval=0."),
+    )
+    ErrorDelay = models.IntegerField(
+        _('Error Delay'), default=60,
+        help_text=_('Detik jeda reconnect device setelah koneksi ke server GAGAL.'),
+    )
+    Delay = models.IntegerField(
+        _('Delay'), default=30,
+        help_text=_('Detik jeda antar koneksi device ke server dalam kondisi normal.'),
+    )
+    Realtime = models.BooleanField(
+        _('Realtime'), default=True,
+        help_text=_('True: device upload data baru instan begitu ada. False: ikut jadwal TransTimes/TransInterval.'),
+    )
+    Encrypt = models.BooleanField(
+        _('Encrypt'), default=False,
+        help_text=_('Enkripsi data transfer device<->server. Lihat test/myrule.md poin 6 (masih tahap dicoba).'),
+    )
 
     class Meta:
         db_table = 'iclock'
@@ -161,8 +210,87 @@ class iclock(models.Model):
     def __str__(self):
         return f'{self.SN} ({self.Alias})' if self.Alias else self.SN
 
+    # ------------------------------------------------------------------
+    # Cache-aware save/delete (test/myrule.md poin 1) -- pola diadaptasi
+    # dari implementasi legacy Anda (test/models.py::iclock.save/delete +
+    # getDevice()), disesuaikan ke Django cache framework modern (Redis,
+    # sudah dipakai project ini utk Channels/Celery).
+    #
+    # PENTING dibedakan dari `accounts.middleware`-style caching: ini
+    # write-through PENUH (setiap .save() SELALU nulis DB, cache cuma
+    # disegarkan mengikuti) -- BEDA dengan throttling utk heartbeat
+    # LastActivity yang sangat sering (lihat `save_heartbeat()` di bawah,
+    # padanan `checkAndSave()` legacy, YANG throttle penulisan DB-nya).
+    # ------------------------------------------------------------------
+    CACHE_KEY_PREFIX = 'iclock_device_'
+    CACHE_TTL_SECONDS = 300  # cache device SELAMA TIDAK ada aktivitas apa pun (bukan TTL heartbeat)
+
+    @classmethod
+    def cache_key(cls, sn: str) -> str:
+        return f'{cls.CACHE_KEY_PREFIX}{sn}'
+
+    @classmethod
+    def get_cached(cls, sn: str) -> 'iclock | None':
+        """
+        Read-through cache -- padanan `getDevice(sn)` legacy: cek cache
+        dulu, fallback ke DB kalau miss (lalu cache hasilnya), None kalau
+        SN memang tidak terdaftar sbg Active Device sama sekali.
+        """
+        sn = (sn or '').strip()
+        if not sn:
+            return None
+        from django.core.cache import cache
+        cached = cache.get(cls.cache_key(sn))
+        if cached is not None:
+            return cached
+        try:
+            device = cls.objects.select_related('DeptID').get(SN=sn)
+        except cls.DoesNotExist:
+            return None
+        cache.set(cls.cache_key(sn), device, cls.CACHE_TTL_SECONDS)
+        return device
+
+    def save(self, *args, **kwargs):
+        """Write-through: SELALU simpan ke DB, cache disegarkan mengikuti (padanan iclock.save() legacy)."""
+        from django.core.cache import cache
+        if self.DelTag:
+            self.DelTag = 0
+        super().save(*args, **kwargs)
+        cache.set(self.cache_key(self.SN), self, self.CACHE_TTL_SECONDS)
+
+    def delete(self, *args, **kwargs):
+        from django.core.cache import cache
+        cache.delete(self.cache_key(self.SN))
+        return super().delete(*args, **kwargs)
+
+    def save_heartbeat(self) -> None:
+        """
+        Update `LastActivity` dgn THROTTLE -- padanan `checkAndSave()`
+        legacy: cache device (fresh LastActivity) SELALU diperbarui supaya
+        `get_cached()` selalu up-to-date, TAPI penulisan ke DB cuma terjadi
+        kalau sudah lewat `HEARTBEAT_DB_WRITE_THROTTLE_SECONDS` detik sejak
+        DB terakhir ditulis -- device polling tiap ~30 detik (lihat resume
+        protokol), tanpa throttle ini tabel `iclock` akan ditulis ULANG
+        setiap request dari SETIAP device yang terhubung, sangat boros.
+        """
+        from django.core.cache import cache
+        from django.utils import timezone as dj_timezone
+
+        now = dj_timezone.now()
+        self.LastActivity = now
+        cache.set(self.cache_key(self.SN), self, self.CACHE_TTL_SECONDS)
+
+        throttle_key = f'{self.CACHE_KEY_PREFIX}la_dbwrite_{self.SN}'
+        last_db_write = cache.get(throttle_key)
+        if last_db_write is None or (now - last_db_write).total_seconds() > self.HEARTBEAT_DB_WRITE_THROTTLE_SECONDS:
+            type(self).objects.filter(SN=self.SN).update(LastActivity=now)
+            cache.set(throttle_key, now, self.CACHE_TTL_SECONDS)
+
+    HEARTBEAT_DB_WRITE_THROTTLE_SECONDS = 30
+
     def LastData(self):
         """
+
         Waktu transaksi (checkinout) TERAKHIR yang tercatat dari device ini
         -- beda dengan `LastActivity` (waktu request/heartbeat terakhir dari
         protokol push): ini murni query ke tabel `transaction`, jadi
@@ -203,6 +331,50 @@ class RegisteredDevice(models.Model):
 
     def __str__(self):
         return self.DeviceName or self.SN
+
+    # Cache read-through -- padanan `getNewDevice(sn)` legacy (lihat catatan
+    # cache di model `iclock` di atas). Cache key TERPISAH dari `iclock`
+    # (prefix beda) supaya SN yang sama tidak tabrakan antar 2 tabel ini.
+    CACHE_KEY_PREFIX = 'iclock_registered_'
+    CACHE_TTL_SECONDS = 300
+
+    @classmethod
+    def cache_key(cls, sn: str) -> str:
+        return f'{cls.CACHE_KEY_PREFIX}{sn}'
+
+    @classmethod
+    def get_cached(cls, sn: str) -> 'RegisteredDevice | None':
+        sn = (sn or '').strip()
+        if not sn:
+            return None
+        from django.core.cache import cache
+        cached = cache.get(cls.cache_key(sn))
+        if cached is not None:
+            return cached
+        try:
+            device = cls.objects.select_related('DeptID').get(SN=sn)
+        except cls.DoesNotExist:
+            return None
+        cache.set(cls.cache_key(sn), device, cls.CACHE_TTL_SECONDS)
+        return device
+
+    def save(self, *args, **kwargs):
+        from django.core.cache import cache
+        super().save(*args, **kwargs)
+        cache.set(self.cache_key(self.SN), self, self.CACHE_TTL_SECONDS)
+
+
+def get_default_department() -> 'department':
+    """
+    Pool default (DeptID=0, "GUEST") -- dipakai saat device BARU auto-
+    registrasi ke RegisteredDevice (belum dikonfigurasi admin, lihat
+    test/myrule.md poin 2a), auto-dibuat kalau belum ada baris DeptID=0.
+    Padanan `getDefaultDept()` legacy.
+    """
+    dept, _created = department.objects.get_or_create(
+        DeptID=0, defaults={'DeptName': 'GUEST'},
+    )
+    return dept
 
 
 class employee(models.Model):
@@ -391,6 +563,65 @@ class devcmds(models.Model):
 
     def __str__(self):
         return f'{self.SN}, {self.CmdCommitTime}'
+
+
+# ---------------------------------------------------------------------------
+# Helper command queue (dipakai endpoint getrequest, akan dibangun tahap
+# berikutnya) -- optimasi cache "device tanpa command tertunda", padanan
+# `deviceCmd()`/`appendDevCmd()` legacy (test/models.py, test/dataproc.py).
+# ---------------------------------------------------------------------------
+_NOCMD_DEVICE_CACHE_KEY = 'iclock_nocmd_devices'
+_NOCMD_DEVICE_CACHE_TTL = 300
+
+
+def get_pending_commands(device: 'iclock', limit: int = 1000) -> list:
+    """
+    Ambil command yang BELUM dieksekusi device ini (`CmdOverTime` masih
+    kosong), TAPI cek cache "daftar device tanpa command tertunda" dulu --
+    kalau device ini ADA di daftar itu, langsung return [] TANPA query DB
+    sama sekali. Device di-poll SETIAP ~30 detik oleh SEMUA device
+    terhubung (lihat resume protokol), dan MAYORITAS waktu memang tidak
+    ada command tertunda -- tanpa optimasi ini, tabel `devcmds` akan
+    di-query berulang-ulang sia-sia oleh setiap device di setiap polling.
+    """
+    from django.core.cache import cache
+
+    nocmd_devices = cache.get(_NOCMD_DEVICE_CACHE_KEY) or set()
+    if device.SN in nocmd_devices:
+        return []
+
+    commands = list(
+        devcmds.objects.filter(SN=device, CmdOverTime__isnull=True).order_by('id')[:limit]
+    )
+    if not commands:
+        nocmd_devices.add(device.SN)
+        cache.set(_NOCMD_DEVICE_CACHE_KEY, nocmd_devices, _NOCMD_DEVICE_CACHE_TTL)
+    return commands
+
+
+def clear_nocmd_cache(sn: str) -> None:
+    """
+    Keluarkan SN ini dari cache "tanpa command tertunda" -- dipanggil begitu
+    ada command BARU ditambahkan utk device ini (append_device_command),
+    ATAU begitu device kirim data baru (kemungkinan memicu command reaktif,
+    mis. hapus user setelah query info), supaya polling BERIKUTNYA benar2
+    mengecek DB lagi alih-alih percaya cache lama.
+    """
+    from django.core.cache import cache
+
+    nocmd_devices = cache.get(_NOCMD_DEVICE_CACHE_KEY)
+    if nocmd_devices and sn in nocmd_devices:
+        nocmd_devices.discard(sn)
+        cache.set(_NOCMD_DEVICE_CACHE_KEY, nocmd_devices, _NOCMD_DEVICE_CACHE_TTL)
+
+
+def append_device_command(device: 'iclock', cmd_content: str, commit_time=None) -> 'devcmds':
+    """Tambah 1 command baru ke antrean device ini -- padanan `appendDevCmd()` legacy."""
+    cmd = devcmds.objects.create(
+        SN=device, CmdContent=cmd_content, CmdCommitTime=commit_time or timezone.now(),
+    )
+    clear_nocmd_cache(device.SN)
+    return cmd
 
 
 class FeaturePermission(models.Model):

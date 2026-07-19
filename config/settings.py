@@ -311,6 +311,32 @@ CHANNEL_LAYERS = {
 }
 
 # ---------------------------------------------------------------------------
+# Cache framework (Django cache, BEDA dari Channels & Celery meski sama-sama
+# pakai Redis -- makanya DB index beda: Channels=0 (default), Celery=1, cache
+# ini=2). Dipakai utk pola "cache-aware save" push protocol iclock (device
+# polling ~30 detik, hindari beban baca/tulis DB berlebihan tiap request --
+# lihat iclock/models.py::iclock.get_cached/save_heartbeat, test/myrule.md
+# poin 1).
+# ---------------------------------------------------------------------------
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': f'redis://{REDIS_HOST}:{REDIS_PORT}/2',
+    },
+}
+
+# ---------------------------------------------------------------------------
+# PUSH SDK -- 'DB Write Policy' (test/myrule.md Rule 4): data device
+# (attendance/operation log/fingerprint template) ditulis ke TEXT FILE dulu
+# (durability/source-of-truth) SEBELUM diproses Celery task tulis ke
+# database. Struktur: {PUSHSDK_BASE_DIR}/masterattlog/{MMYYYY}/{DD}.txt
+# (dst utk masteroplog/masterfplog, +variant '_other' utk PIN tidak valid).
+# Default 'data/' di root project, folder DIPISAH dari static/media Django
+# supaya gampang di-backup/rotate terpisah. Lihat iclock/pushsdk_writer.py.
+# ---------------------------------------------------------------------------
+PUSHSDK_BASE_DIR = env('PUSHSDK_BASE_DIR', default=str(BASE_DIR / 'data'))
+
+# ---------------------------------------------------------------------------
 # Celery -- dipakai utk lempar proses berat/CPU-intensive (face recognition,
 # lihat mattendance/tasks.py) ke WORKER TERPISAH, supaya tidak membebani
 # proses Django/Daphne utama yang juga menangani request lain + WebSocket.
