@@ -12,4 +12,7 @@ data/
 tmp/
 masterlogother/
 
-
+# IDEs & OS Files
+.vscode/
+.idea/
+.DS_Store
