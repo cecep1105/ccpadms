@@ -15,6 +15,8 @@ Encrypt=0
 
 jadi saat respon pertama, server mengirimkan options sesuai yang ada di database untuk sn yang bersangkutan.
 
+2a. Device yang konek server akan dicheck dulu apakah SN-nya ada di table iclock (activedevice), bila tidak, buat atau update ke table RegisteredDevice dengan DeptID=0, dan tidak dilanjutkan ke proses berikutnya (dengan info SN,Alias (sepertinya ambil dari IPAddress),lastactivity dan field lain yang ada). Jika ada di iclock, make dilanjutkan ke proses berikutnya.
+
 3. Jumlah PIN dari device =7 atau 8 (tidak termasuk prefix '0')
 
 4. 'DB Write Policy' => server menulis log/attlog ke textfile, untuk nulis ke db-nya dilempar ke celery task. Untuk format text yang ditulis seperti file yang ada di folder test/062026.zip. nama filenya: {base_dir}/masterattlog/{MMYYYY}/{DD}.txt (dibuat pathnya tergantu OS => bisa / atau \. 
