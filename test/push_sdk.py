@@ -149,6 +149,11 @@ def _parse_transaction_row(row: list[str], source: str, line_no: int) -> tuple[s
         logger.warning('%s:%d -- baris rusak (jumlah kolom %d, harus 4), dilewati: %r', source, line_no, len(row), row)
         return None
     sn, pin, ts_str, check_type = (v.strip() for v in row)
+
+    if len(sn)<10:
+        return None
+
+
     if not sn or not pin:
         logger.warning('%s:%d -- SN/PIN kosong, dilewati: %r', source, line_no, row)
         return None
