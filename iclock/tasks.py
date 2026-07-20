@@ -16,7 +16,7 @@ from celery import shared_task
 from django.utils.dateparse import parse_datetime
 
 from .models import RegisteredDevice, devlog, employee, fptemp, get_default_department, iclock, oplog, transaction
-from .services import normalize_pin
+from .services import lookup_employee_name, normalize_pin
 
 logger = logging.getLogger('iclock.pushsdk')
 
@@ -27,6 +27,76 @@ def _get_device_or_none(sn: str):
     if device is None:
         logger.warning("Task DB-write: device SN='%s' tidak ditemukan di Active Device -- data dilewati.", sn)
     return device
+
+
+def _get_or_create_employee(normalized_pin: str, raw_pin: str, device, log_prefix: str):
+    """
+    Employee auto-create dgn NAME LOOKUP -- dipakai bersama
+    write_attlog_to_db & write_fplog_to_db (device TIDAK PERNAH kirim nama
+    sama sekali di ATTLOG/FP, cuma PIN). Kalau Employee-nya BELUM ada,
+    dicoba dulu cari namanya dari SQL Server eksternal (iclock/sources.py,
+    prefix PIN menentukan sumber mana) SEBELUM auto-create -- best-effort,
+    kalau lookup gagal/tidak ketemu, Employee TETAP dibuat (cuma nama-nya
+    kosong, dilengkapi manual admin belakangan) -- lookup yang gagal TIDAK
+    BOLEH bikin data attendance/fingerprint-nya ikut hilang.
+    """
+    if employee.objects.filter(PIN=normalized_pin).exists():
+        return employee.objects.get(PIN=normalized_pin), False
+
+    looked_up_name = lookup_employee_name(raw_pin)
+    if looked_up_name:
+        logger.info("%s: Employee PIN '%s' belum ada -- nama ditemukan dari lookup: '%s'.", log_prefix, normalized_pin, looked_up_name)
+    else:
+        logger.info("%s: Employee PIN '%s' belum ada -- nama TIDAK ditemukan dari lookup, dibuat tanpa nama.", log_prefix, normalized_pin)
+
+    emp, created = employee.objects.get_or_create(
+        PIN=normalized_pin,
+        defaults={
+            'DeptID': get_default_department(), 'SN': device,
+            **({'EName': looked_up_name} if looked_up_name else {}),
+        },
+    )
+    return emp, created
+
+
+def _refresh_employee_last_seen(emp, device, timestamp) -> bool:
+    """
+    Update SN & UTime employee ini ke device & waktu ATTLOG TERBARU --
+    dipakai utk tahu "terakhir check-in kapan & di device mana" (BEDA dari
+    field SN yang asalnya berarti "device tempat employee ini di-enroll"
+    -- di-reuse di sini utk tracking aktivitas terbaru, sesuai permintaan).
+
+    Cuma update kalau timestamp transaksi INI lebih baru dari UTime yang
+    sudah tersimpan -- ATTLOG bisa datang TIDAK berurutan (device retry
+    kirim data lama, atau beberapa device kirim hampir bersamaan), jangan
+    sampai transaksi LAMA menimpa catatan "terakhir" yang sudah lebih baru.
+    Return True kalau ADA perubahan (caller perlu .save()).
+    """
+    if emp.UTime is not None and emp.UTime >= timestamp:
+        return False
+    emp.SN = device
+    emp.UTime = timestamp
+    return True
+
+
+def _maybe_retry_name_lookup(emp, raw_pin: str) -> bool:
+    """
+    Kalau EName employee ini masih KOSONG (placeholder ' ' bawaan model,
+    atau benar-benar blank), coba lookup lagi -- BEDA dari lookup saat
+    auto-create (_get_or_create_employee, cuma dicoba SEKALI saat baris
+    Employee pertama kali dibuat), ini di-retry TIAP transaksi SELAMA nama
+    masih kosong (berguna kalau lookup pertama gagal krn MSSQL down saat
+    itu, tapi sekarang sudah pulih -- tanpa perlu admin intervensi manual).
+    Begitu nama ketemu & tersimpan, TIDAK dicoba lagi (retry cuma jalan
+    selama masih kosong). Return True kalau ADA perubahan (caller .save()).
+    """
+    if emp.EName and emp.EName.strip():
+        return False
+    looked_up_name = lookup_employee_name(raw_pin)
+    if not looked_up_name:
+        return False
+    emp.EName = looked_up_name
+    return True
 
 
 def _parse_operlog_fields(fields: str) -> dict:
@@ -60,17 +130,23 @@ def write_attlog_to_db(self, sn: str, pin: str, timestamp_iso: str, check_type: 
         return {'success': False, 'error': f"Device SN='{sn}' tidak ditemukan"}
 
     normalized_pin = normalize_pin(pin)
-    emp, emp_created = employee.objects.get_or_create(
-        PIN=normalized_pin,
-        defaults={'DeptID': get_default_department(), 'SN': device},
-    )
-    if emp_created:
-        logger.info("Task DB-write ATTLOG: Employee PIN '%s' belum ada -- auto-dibuat (placeholder).", normalized_pin)
+    emp, emp_created = _get_or_create_employee(normalized_pin, pin, device, 'Task DB-write ATTLOG')
 
     timestamp = parse_datetime(timestamp_iso)
     if timestamp is None:
         logger.warning("Task DB-write ATTLOG: timestamp '%s' tidak valid -- dilewati.", timestamp_iso)
         return {'success': False, 'error': 'Timestamp tidak valid'}
+
+    # Refresh "terakhir check-in di device mana & kapan" (SN/UTime) + retry
+    # lookup nama kalau masih kosong -- keduanya digabung jadi 1 save() biar
+    # tidak double query UPDATE tiap transaksi (volume ATTLOG bisa tinggi).
+    update_fields = []
+    if _refresh_employee_last_seen(emp, device, timestamp):
+        update_fields += ['SN', 'UTime']
+    if not emp_created and _maybe_retry_name_lookup(emp, pin):
+        update_fields.append('EName')
+    if update_fields:
+        emp.save(update_fields=update_fields)
 
     _trx, created = transaction.objects.get_or_create(
         UserID=emp, TTime=timestamp, SN=device,
@@ -169,12 +245,9 @@ def write_fplog_to_db(self, sn: str, fields: str):
         return {'success': False, 'error': 'PIN tidak ada di payload'}
 
     normalized_pin = normalize_pin(pin)
-    emp, emp_created = employee.objects.get_or_create(
-        PIN=normalized_pin,
-        defaults={'DeptID': get_default_department(), 'SN': device},
-    )
-    if emp_created:
-        logger.info("Task DB-write FP: Employee PIN '%s' belum ada -- auto-dibuat (placeholder).", normalized_pin)
+    emp, emp_created = _get_or_create_employee(normalized_pin, pin, device, 'Task DB-write FP')
+    if not emp_created and _maybe_retry_name_lookup(emp, pin):
+        emp.save(update_fields=['EName'])
 
     try:
         fid = int(parsed.get('FID', 0))

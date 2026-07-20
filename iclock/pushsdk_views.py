@@ -36,6 +36,22 @@ def _text_response(body: str) -> HttpResponse:
     return HttpResponse(body, content_type='text/plain')
 
 
+def _resolve_request_ip(request) -> str:
+    """
+    IP address SUNGGUHAN device -- ADA mekanisme mirroring di sistem ADMS
+    production Anda (tiap request production di-mirror ke sistem dev ini),
+    jadi `REMOTE_ADDR` yang diterima DI SINI adalah IP SERVER MIRRORING-nya,
+    BUKAN IP device aslinya. Production mengirim IP asli lewat query param
+    `ORIGINIP` -- kalau ada, PAKAI itu; kalau tidak ada (request LANGSUNG
+    dari device, bukan hasil mirroring), baru fallback ke `REMOTE_ADDR`
+    seperti biasa.
+    """
+    mirror_ip = request.GET.get('ORIGINIP')
+    if mirror_ip:
+        return mirror_ip
+    return request.META.get('REMOTE_ADDR', '') or ''
+
+
 def resolve_device(request):
     """
     Rule 2a: cek SN device ada di Active Device (iclock) atau belum.
@@ -53,14 +69,14 @@ def resolve_device(request):
     """
     sn = request.GET.get('SN', '').strip()
     if not sn:
-        logger.warning("Request push protocol tanpa parameter SN dari IP %s", request.META.get('REMOTE_ADDR'))
+        logger.warning("Request push protocol tanpa parameter SN dari IP %s", _resolve_request_ip(request))
         return None, _text_response('UNKNOWN Device')
 
     device = iclock.get_cached(sn)
     if device is not None:
         return device, None
 
-    ip_address = request.META.get('REMOTE_ADDR', '') or ''
+    ip_address = _resolve_request_ip(request)
     now = timezone.now()
     regdevice = RegisteredDevice.objects.filter(SN=sn).first()
     if regdevice is None:
@@ -113,6 +129,7 @@ def _cdata_get(request, device):
     lines.append(f'TransTimes={device.TransTimes}')
     lines.append(f'TransInterval={device.TransInterval}')
     lines.append(f'TransFlag={device.UpdateDB}')
+    lines.append('SyncTime=600')
     if device.TZAdj is not None:
         lines.append(f'TimeZone={0 if device.TZAdj == 14 else device.TZAdj}')
     lines.append(f'Realtime={1 if device.Realtime else 0}')

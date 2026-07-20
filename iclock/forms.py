@@ -66,7 +66,13 @@ class ActiveDeviceForm(forms.ModelForm):
 
     class Meta:
         model = iclock
-        fields = ['SN', 'Alias', 'DeptID', 'Function', 'IPAddress', 'MAC', 'TZAdj']
+        fields = [
+            'SN', 'Alias', 'DeptID', 'Function', 'IPAddress', 'MAC', 'TZAdj',
+            # Konfigurasi PUSH SDK per-device (test/myrule.md Rule 2) --
+            # dikirim ke device sbg respons GET /iclock/cdata?options=all.
+            'LogStamp', 'OpLogStamp', 'PhotoStamp', 'TransTimes', 'TransInterval',
+            'UpdateDB', 'ErrorDelay', 'Delay', 'Realtime', 'Encrypt',
+        ]
         widgets = {
             'SN': _text(placeholder='Serial number mesin'),
             'Alias': _text(placeholder='Nama alias device'),
@@ -74,6 +80,16 @@ class ActiveDeviceForm(forms.ModelForm):
             'IPAddress': _text(placeholder='192.168.1.100'),
             'MAC': _text(placeholder='00:11:22:33:44:55'),
             'TZAdj': _text(type='number'),
+            'LogStamp': _text(placeholder='Timestamp ATTLOG terakhir'),
+            'OpLogStamp': _text(placeholder='Timestamp OPERLOG terakhir'),
+            'PhotoStamp': _text(placeholder='Timestamp foto terakhir'),
+            'TransTimes': _text(placeholder='00:00;14:05'),
+            'TransInterval': _text(type='number'),
+            'UpdateDB': _text(placeholder='1111111100 (TransFlag)'),
+            'ErrorDelay': _text(type='number'),
+            'Delay': _text(type='number'),
+            'Realtime': forms.CheckboxInput(attrs={'class': 'rounded border-slate-300'}),
+            'Encrypt': forms.CheckboxInput(attrs={'class': 'rounded border-slate-300'}),
         }
 
     def __init__(self, *args, is_create=True, **kwargs):

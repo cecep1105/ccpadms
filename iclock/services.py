@@ -227,3 +227,48 @@ def backup_device_fingerprints(device: iclock, pin_pattern: str = '') -> list:
         f'PIN dinormalisasi (zero-pad {PIN_ZERO_PAD_LENGTH} digit): {normalized_count}.'
     )
     return log
+
+def lookup_employee_name(raw_pin: str) -> str | None:
+    """
+    Cari nama employee dari SQL Server eksternal (iclock/sources.py)
+    berdasar PIN prefix -- dipakai saat auto-create Employee dari push
+    protocol (iclock/tasks.py), karena ATTLOG/FP device TIDAK pernah
+    kirim nama sama sekali.
+
+    Best-effort: return None kalau prefix PIN tidak match sumber manapun,
+    ATAU koneksi/query MSSQL gagal, ATAU tidak ketemu barisnya -- JANGAN
+    sampai kegagalan lookup ini bikin proses auto-create Employee-nya ikut
+    gagal (nama boleh kosong dulu, dilengkapi manual admin belakangan).
+    """
+    import logging
+
+    # Import lokal (bukan di top-level file) -- iclock/sources.py &
+    # mclock/mssql_client.py TIDAK butuh dimuat di startup Django biasa,
+    # cuma saat lookup ini benar-benar dipanggil (auto-create Employee).
+    from mclock.mssql_client import MSSQLConnectionError, run_query
+
+    from .sources import get_name_lookup_source
+
+    logger = logging.getLogger('iclock.pushsdk')
+
+    raw = get_raw_device_pin(raw_pin)
+    found = get_name_lookup_source(raw)
+    if found is None:
+        return None
+    key, source = found
+
+    try:
+        rows = run_query(
+            source['base_sql'], params=source['param'](raw),
+            server=source['server'], database=source['database'],
+        )
+    except MSSQLConnectionError as exc:
+        logger.warning("Lookup nama employee (sumber '%s') gagal utk PIN '%s': %s", key, raw, exc)
+        return None
+    except Exception as exc:  # noqa: BLE001 -- param() bisa IndexError dsb kalau PIN terlalu pendek utk transform driver-hrc
+        logger.warning("Lookup nama employee (sumber '%s') error tak terduga utk PIN '%s': %s", key, raw, exc)
+        return None
+
+    if not rows:
+        return None
+    return rows[0].get(source['name_column']) or None

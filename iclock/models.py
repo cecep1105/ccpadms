@@ -153,7 +153,7 @@ class iclock(models.Model):
         help_text=_('Interval (menit) device mengecek & mengirim data baru ke server.'),
     )
     UpdateDB = models.CharField(
-        max_length=10, default='1111111100', editable=False,
+        max_length=10, default='1111111100',
         help_text=_(
             "Ini field 'TransFlag' versi lama (nama kolom asli tabel ZKTeco) -- menentukan tipe data "
             "apa saja yang di-auto-upload device (attendance/operation log/foto/dst). Lihat resume "
