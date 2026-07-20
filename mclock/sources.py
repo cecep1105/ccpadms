@@ -36,7 +36,7 @@ MOBILE_ATTENDANCE_SOURCES = OrderedDict([
             "convert(datetime,convert(varchar(10),tanggal,121)+' '+jam) AS ttime,"
             "Keterangan AS ctype, bTransfer AS bProses "
             "from dbo.AbsenOtomatis "
-            "WHERE bTransfer=0 AND SN IN ('Mobile','101D','102','104','112','113','111')"
+            "WHERE bTransfer=0 AND LEN(SN)<10"
         ),
     }),
     ('mitra-mobile', {

@@ -56,7 +56,6 @@ urlpatterns = [
     # Transaction / Log Absensi (model: transaction)
     path('transaction/', views.transaction_list, name='transaction_list'),
     path('transaction/add/', views.transaction_add, name='transaction_add'),
-    path('transaction/<int:pk>/edit/', views.transaction_edit, name='transaction_edit'),
     path('transaction/<int:pk>/delete/', views.transaction_delete, name='transaction_delete'),
 
     # Operation Log (model: oplog)

@@ -129,7 +129,6 @@ def _cdata_get(request, device):
     lines.append(f'TransTimes={device.TransTimes}')
     lines.append(f'TransInterval={device.TransInterval}')
     lines.append(f'TransFlag={device.UpdateDB}')
-    lines.append('SyncTime=600')
     if device.TZAdj is not None:
         lines.append(f'TimeZone={0 if device.TZAdj == 14 else device.TZAdj}')
     lines.append(f'Realtime={1 if device.Realtime else 0}')
@@ -161,11 +160,17 @@ def _cdata_post(request, device):
 
 def _handle_attlog_upload(request, device, raw_data):
     """
-    Rule 3 + Rule 4: tiap baris ATTLOG ('PIN\\tTIME\\tSTATUS\\t...') ditulis
-    ke text file harian DULU (append_attlog_line), baru kalau PIN-nya valid
-    (7/8 digit tanpa leading zero) di-lempar ke Celery task tulis-DB juga.
-    PIN tidak valid TETAP dicatat ke text file (folder '_other'), TAPI
-    TIDAK PERNAH masuk database.
+    Rule 3 + Rule 4: tiap baris ATTLOG ('PIN\\tTIME\\tSTATUS\\tVERIFY\\t...')
+    ditulis ke text file harian DULU (append_attlog_line), baru kalau
+    PIN-nya valid (7/8 digit tanpa leading zero) di-lempar ke Celery task
+    tulis-DB juga. PIN tidak valid TETAP dicatat ke text file (folder
+    '_other'), TAPI TIDAK PERNAH masuk database.
+
+    Field ke-4 (VERIFY) OPSIONAL sesuai protokol asli ("beberapa mesin
+    attendance tidak kirim field ini" -- resume protokol §4.1) -- default
+    0 kalau tidak ada. Verify diteruskan APA ADANYA ke text file & task DB
+    -- konsolidasi device absen mobile (verify=PoolID 3 digit) BUKAN
+    ditangani di sini, itu proses import terpisah di masa depan.
     """
     ok_count = 0
     for line in raw_data.splitlines():
@@ -177,15 +182,16 @@ def _handle_attlog_upload(request, device, raw_data):
             logger.warning("Baris ATTLOG tidak lengkap dari SN=%s, dilewati: %r", device.SN, line)
             continue
         pin, time_str, check_type = parts[0], parts[1], parts[2]
+        verify = parts[3] if len(parts) > 3 else '0'
         try:
             timestamp = datetime.strptime(time_str, '%Y-%m-%d %H:%M:%S')
         except ValueError:
             logger.warning("Waktu ATTLOG tidak valid dari SN=%s: %r", device.SN, time_str)
             continue
 
-        _path, pin_valid = append_attlog_line(device.SN, pin, timestamp, check_type)
+        _path, pin_valid = append_attlog_line(device.SN, pin, timestamp, check_type, verify)
         if pin_valid:
-            write_attlog_to_db.delay(device.SN, pin, timestamp.isoformat(), check_type)
+            write_attlog_to_db.delay(device.SN, pin, timestamp.isoformat(), check_type, verify)
         ok_count += 1
 
         wsinfo('iclock', 'device_attlog', {

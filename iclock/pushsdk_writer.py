@@ -51,11 +51,22 @@ def _append_line_locked(path: Path, line: str) -> None:
         f.write(line)
 
 
-def append_attlog_line(sn: str, pin: str, timestamp: datetime, check_type: str) -> tuple[Path, bool]:
+def append_attlog_line(sn: str, pin: str, timestamp: datetime, check_type: str, verify) -> tuple[Path, bool]:
     """
-    Tulis 1 baris ATTLOG ke text file harian -- format PERSIS sama dgn
-    test/062026.zip (sudah tervalidasi end-to-end lewat push_sdk.py
-    emulator sebelumnya): 'SN,PIN,DD/MM/YYYY HH:MM,checktype'.
+    Tulis 1 baris ATTLOG ke text file harian -- format:
+    'SN,PIN,DD/MM/YYYY HH:MM,checktype,verify' (5 kolom -- SEBELUMNYA cuma
+    4 kolom/tanpa verify, format LAMA sama persis dgn test/062026.zip).
+
+    `verify` -- utk device mesin finger biasa, ini field VERIFY protokol
+    asli (1 digit: 0=password/1=fingerprint/2=card/9=lainnya, lihat resume
+    protokol §4.1). Field ini SEKARANG JUGA dipakai utk skema konsolidasi
+    device absen mobile (SN gabungan tunggal, mis. 'ABSENDIGITAL01') --
+    utk kasus itu `verify` diisi PoolID mobile (3 digit) alih-alih kode
+    verifikasi biasa, supaya asal pool-nya tetap bisa dibedakan walau SN
+    device-nya sama. Penulisan text file ini SENDIRI TIDAK membedakan
+    kedua kasus (cuma nulis apa pun `verify` yang diberikan caller) --
+    logic BEDA-nya ada di endpoint pemanggil (pushsdk_views.py) & proses
+    import mobile->iclock (masih tahap rencana, belum diimplementasikan).
 
     Return (path_file_yg_ditulis, pin_valid) -- `pin_valid` dipakai caller
     (endpoint cdata) utk memutuskan apakah data ini boleh dilempar ke
@@ -64,7 +75,7 @@ def append_attlog_line(sn: str, pin: str, timestamp: datetime, check_type: str) 
     """
     pin_valid = is_valid_device_pin(pin)
     path = _log_file_path('masterattlog', pin_valid, timestamp)
-    line = f"{sn},{pin},{timestamp.strftime('%d/%m/%Y %H:%M')},{check_type}\n"
+    line = f"{sn},{pin},{timestamp.strftime('%d/%m/%Y %H:%M')},{check_type},{verify}\n"
     _append_line_locked(path, line)
     return path, pin_valid
 

@@ -272,3 +272,38 @@ def lookup_employee_name(raw_pin: str) -> str | None:
     if not rows:
         return None
     return rows[0].get(source['name_column']) or None
+
+
+def determine_transaction_function(raw_pin: str, device) -> str | None:
+    """
+    Tentukan kode `Function` utk 1 baris ATTLOG (tabel `transaction`),
+    sesuai `settings.DEVICEFUNCTION`.
+
+    1. Kalau device INI SENDIRI sudah dikonfigurasi `Function='X'` (KANTIN
+       -- field yang SAMA dipilih admin dari dropdown "Function" saat
+       setup Active Device, lihat iclock/forms.py::_device_function_choices)
+       -> transaction ini JUGA 'X', APAPUN PIN-nya (device kantin berarti
+       SEMUA check-in lewat situ dianggap aktivitas kantin).
+    2. Selain itu -> cocokkan KARAKTER PERTAMA PIN MENTAH (leading zero
+       dibuang, lihat get_raw_device_pin) ke tiap KEY di
+       settings.DEVICEFUNCTION -- tiap KARAKTER dalam 1 key adalah prefix
+       valid (mis. key '89' berarti prefix '8' ATAU '9' -> function code
+       '89' -- lihat contoh myrule.md: PIN '8113009' prefix '8' -> '89').
+
+    Return None kalau device bukan KANTIN dan prefix PIN tidak cocok
+    manapun (Function transaction dibiarkan kosong).
+    """
+    from django.conf import settings
+
+    if device is not None and device.Function == 'X':
+        return 'X'
+
+    device_function = getattr(settings, 'DEVICEFUNCTION', {})
+    raw = get_raw_device_pin(raw_pin)
+    if not raw:
+        return None
+    first_char = raw[0]
+    for key in device_function:
+        if key != 'X' and first_char in key:
+            return key
+    return None

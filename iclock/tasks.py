@@ -16,7 +16,7 @@ from celery import shared_task
 from django.utils.dateparse import parse_datetime
 
 from .models import RegisteredDevice, devlog, employee, fptemp, get_default_department, iclock, oplog, transaction
-from .services import lookup_employee_name, normalize_pin
+from .services import determine_transaction_function, lookup_employee_name, normalize_pin
 
 logger = logging.getLogger('iclock.pushsdk')
 
@@ -110,12 +110,19 @@ def _parse_operlog_fields(fields: str) -> dict:
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=10)
-def write_attlog_to_db(self, sn: str, pin: str, timestamp_iso: str, check_type: str):
+def write_attlog_to_db(self, sn: str, pin: str, timestamp_iso: str, check_type: str, verify=0):
     """
     Tulis 1 baris ATTLOG ke tabel `transaction` -- HANYA dipanggil endpoint
     utk PIN yang SUDAH lolos validasi Rule 3 (is_valid_device_pin).
     `get_or_create` dipakai supaya panggilan ganda (mis. Celery retry)
     TIDAK membuat baris transaksi duplikat.
+
+    `verify` diisi ke `transaction.Verify` -- utk device finger biasa ini
+    kode verifikasi 1 digit dari protokol asli (0/1/2/9). Field ini JUGA
+    (rencana ke depan) dipakai simpan PoolID 3-digit device absen mobile
+    setelah dikonsolidasi ke 1 SN ('ABSENDIGITAL01') -- proses IMPORT
+    mobile->iclock itu SENDIRI belum diimplementasikan di sini (masih via
+    schedule terpisah, celery-beat/crontab, di luar scope task ini).
 
     Kalau Employee dgn PIN ini BELUM ada di database (skenario nyata:
     wajah/jari sudah di-enroll LANGSUNG di device fisik, tapi OPERLOG-nya
@@ -150,7 +157,7 @@ def write_attlog_to_db(self, sn: str, pin: str, timestamp_iso: str, check_type: 
 
     _trx, created = transaction.objects.get_or_create(
         UserID=emp, TTime=timestamp, SN=device,
-        defaults={'State': check_type, 'Verify': 0},
+        defaults={'State': check_type, 'Verify': verify, 'Function': determine_transaction_function(pin, device)},
     )
     return {'success': True, 'created': created}
 

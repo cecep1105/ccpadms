@@ -965,17 +965,6 @@ def transaction_add(request):
 
 
 @staff_required
-def transaction_edit(request, pk):
-    trx = get_object_or_404(transaction, pk=pk)
-    form = TransactionForm(request.POST or None, instance=trx)
-    if request.method == 'POST' and form.is_valid():
-        form.save()
-        messages.success(request, 'Transaction berhasil diperbarui.')
-        return redirect('iclock:transaction_list')
-    return render(request, 'iclock/transaction_form.html', {'form': form, 'mode': 'edit', 'target': trx})
-
-
-@staff_required
 @require_POST
 def transaction_delete(request, pk):
     trx = get_object_or_404(transaction, pk=pk)
