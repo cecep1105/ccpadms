@@ -42,29 +42,43 @@ class Command(BaseCommand):
         cmd = options['cmd']
         params = options['params']
 
-
         if cmd[0] == "DEVS":
             from sqlalchemy import MetaData,Table,select,func,desc,create_engine
             from datetime import datetime, timedelta
+            from iclock.models import RegisteredDevice, department
             ten_days_ago = datetime.now() - timedelta(days=10)
             engine = create_engine('mysql+pymysql://adms:ad123@172.16.10.35/dbabsen')
             conn = engine.connect()
             metadata = MetaData()
-            iclock = Table('absensi_iclock', metadata,autoload_with=engine)
-            query = select(iclock).filter(iclock.columns.POOL.notin_(['MOBILE','TEST','TESTING']),
-                                                     func.char_length(iclock.columns.SN)>10, 
-                                                     func.abs(iclock.columns.LastActivity > ten_days_ago),
-                                                     iclock.columns.Function.notin_(['TESTING'])).order_by(desc(iclock.columns.POOL))
+            ic = Table('absensi_iclock', metadata,autoload_with=engine)
+            query = select(ic).filter(ic.columns.POOL.notin_(['MOBILE','TEST','TESTING']),
+                                                     func.char_length(ic.columns.SN)>10, 
+                                                     func.abs(ic.columns.LastActivity > ten_days_ago),
+                                                     ic.columns.Function.notin_(['TESTING'])).order_by(desc(ic.columns.POOL))
             result = conn.execute(query)
             resulset = result.fetchall()
             for i,r in enumerate(resulset,start=1):
-                rr = (
-                    f"{i},{r._mapping[iclock.c.SN]}, "
-                    f"{r._mapping[iclock.c.Name]}, {r._mapping[iclock.c.Function]}, "
-                    f"{r._mapping[iclock.c.POOL]},{r._mapping[iclock.c.MAC].upper() if r._mapping[iclock.c.MAC] else  '00:00:00:00:00:00'}, "
-                    f"{r._mapping[iclock.c.IPAddress]}, {r._mapping[iclock.c.Address]}"
-                )
-                print(rr)
+                _sn =  r._mapping[ic.c.SN]
+                _name  = r._mapping[ic.c.Name]
+                _pool =  r._mapping[ic.c.POOL]
+                _ip = r._mapping[ic.c.IPAddress]
+                _router = r._mapping[ic.c.Address]
+                _function = r._mapping[ic.c.Function] if r._mapping[ic.c.Function] == 'KANTIN' else 'KARYAWAN'
+                _mac = r._mapping[ic.c.MAC].upper() if r._mapping[ic.c.MAC] else  '00:00:00:00:00:00'
+
+                rr = f"{i},{_sn},{_name},{_function},{_pool},{_mac},{_ip}, {_router}"
+
+                try:
+                    dev = RegisteredDevice.objects.get(SN=_sn)
+                    dev.DeviceName = _name
+                    dev.IPAddress = _ip
+                    dev.IPRouter = _router
+                    dev.Function = _function
+                    dev.MAC = _mac
+                    dev.save()
+                    print(rr)
+                except Exception as e:
+                    print(_sn,e)
 
         if cmd[0] == "POOLS":
             from sqlalchemy import MetaData,Table,select,func,desc,create_engine
