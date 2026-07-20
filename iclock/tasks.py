@@ -15,7 +15,7 @@ import logging
 from celery import shared_task
 from django.utils.dateparse import parse_datetime
 
-from .models import RegisteredDevice, devlog, employee, fptemp, iclock, oplog, transaction
+from .models import RegisteredDevice, devlog, employee, fptemp, get_default_department, iclock, oplog, transaction
 from .services import normalize_pin
 
 logger = logging.getLogger('iclock.pushsdk')
@@ -46,16 +46,26 @@ def write_attlog_to_db(self, sn: str, pin: str, timestamp_iso: str, check_type: 
     utk PIN yang SUDAH lolos validasi Rule 3 (is_valid_device_pin).
     `get_or_create` dipakai supaya panggilan ganda (mis. Celery retry)
     TIDAK membuat baris transaksi duplikat.
+
+    Kalau Employee dgn PIN ini BELUM ada di database (skenario nyata:
+    wajah/jari sudah di-enroll LANGSUNG di device fisik, tapi OPERLOG-nya
+    belum/tidak pernah sempat sinkron ke server -- device bisa jadi belum
+    diaktifkan auto-upload OpLog-nya, lihat resume protokol §3.1), Employee
+    OTOMATIS DIBUAT (placeholder, cuma PIN yang pasti terisi) supaya data
+    attendance TIDAK HILANG cuma karena master data belum lengkap -- admin
+    bisa lengkapi Nama/Pool-nya belakangan lewat dashboard.
     """
     device = _get_device_or_none(sn)
     if device is None:
         return {'success': False, 'error': f"Device SN='{sn}' tidak ditemukan"}
 
     normalized_pin = normalize_pin(pin)
-    emp = employee.objects.filter(PIN=normalized_pin).first()
-    if emp is None:
-        logger.warning("Task DB-write ATTLOG: PIN '%s' (device %s) tidak ditemukan di Employee -- dilewati.", normalized_pin, sn)
-        return {'success': False, 'error': f"Employee PIN='{normalized_pin}' tidak ditemukan"}
+    emp, emp_created = employee.objects.get_or_create(
+        PIN=normalized_pin,
+        defaults={'DeptID': get_default_department(), 'SN': device},
+    )
+    if emp_created:
+        logger.info("Task DB-write ATTLOG: Employee PIN '%s' belum ada -- auto-dibuat (placeholder).", normalized_pin)
 
     timestamp = parse_datetime(timestamp_iso)
     if timestamp is None:
@@ -148,6 +158,8 @@ def write_fplog_to_db(self, sn: str, fields: str):
     """
     Tulis/update template fingerprint dari 1 baris OPERLOG bertag 'FP' --
     format 'PIN=...\\tFID=...\\tValid=...\\tTMP=...' (base64 template).
+    Employee auto-dibuat kalau belum ada (sama seperti write_attlog_to_db
+    -- lihat catatan di sana kenapa).
     """
     device = _get_device_or_none(sn)
     parsed = _parse_operlog_fields(fields)
@@ -157,10 +169,12 @@ def write_fplog_to_db(self, sn: str, fields: str):
         return {'success': False, 'error': 'PIN tidak ada di payload'}
 
     normalized_pin = normalize_pin(pin)
-    emp = employee.objects.filter(PIN=normalized_pin).first()
-    if emp is None:
-        logger.warning("Task DB-write FP: PIN '%s' tidak ditemukan di Employee -- dilewati.", normalized_pin)
-        return {'success': False, 'error': f"Employee PIN='{normalized_pin}' tidak ditemukan"}
+    emp, emp_created = employee.objects.get_or_create(
+        PIN=normalized_pin,
+        defaults={'DeptID': get_default_department(), 'SN': device},
+    )
+    if emp_created:
+        logger.info("Task DB-write FP: Employee PIN '%s' belum ada -- auto-dibuat (placeholder).", normalized_pin)
 
     try:
         fid = int(parsed.get('FID', 0))
