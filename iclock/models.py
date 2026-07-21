@@ -288,6 +288,9 @@ class iclock(models.Model):
 
     HEARTBEAT_DB_WRITE_THROTTLE_SECONDS = 30
 
+    def FunctionName(self):
+        return settings.DEVICEFUNCTION[self.Function]
+
     def LastData(self):
         """
 

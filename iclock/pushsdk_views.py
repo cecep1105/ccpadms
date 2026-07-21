@@ -190,7 +190,7 @@ def _handle_attlog_upload(request, device, raw_data):
             continue
 
         _path, pin_valid = append_attlog_line(device.SN, pin, timestamp, check_type, verify)
-        if pin_valid:
+        if pin_valid and device.Function != '0':
             write_attlog_to_db.delay(device.SN, pin, timestamp.isoformat(), check_type, verify)
         ok_count += 1
 

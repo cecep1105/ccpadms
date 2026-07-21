@@ -73,8 +73,11 @@ def append_attlog_line(sn: str, pin: str, timestamp: datetime, check_type: str, 
     Celery task tulis-DB juga, atau CUKUP dicatat ke file '_other' saja
     (Rule 3 + Rule 4).
     """
+    from iclock.models import iclock
     pin_valid = is_valid_device_pin(pin)
-    path = _log_file_path('masterattlog', pin_valid, timestamp)
+    
+    dev = iclock.objects.filter(SN=sn).first()
+    path = _log_file_path('masterattlog' if dev and dev.Function != '0' else 'masteratttestlog' , pin_valid, timestamp)
     line = f"{sn},{pin},{timestamp.strftime('%d/%m/%Y %H:%M')},{check_type},{verify}\n"
     _append_line_locked(path, line)
     return path, pin_valid
