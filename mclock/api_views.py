@@ -3,9 +3,12 @@ API utk app 'mclock' (Mobile Pool, Mobile Pool Location, Pool Device
 Function), dikonsumsi frontend Nuxt. Semua staff-only, pola sama dgn
 iclock/api_views.py.
 """
+from django.db import transaction as db_transaction
 from django.db.models import Q
-from rest_framework import viewsets
+from rest_framework import status, viewsets
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from api.permissions import IsStaffRole
 
@@ -54,6 +57,56 @@ class MobilePoolLocViewSet(BaseMclockViewSet):
     queryset = MobilePoolLoc.objects.all()
     serializer_class = MobilePoolLocSerializer
     search_fields = ['PoolID']
+
+
+class MobilePoolLocBulkSaveAPIView(APIView):
+    """
+    POST /api/v1/mclock/mobile-pool-loc/bulk-save/<pool_id>/
+    body: {"points": [{"lat": ..., "lng": ...}, ...]}
+
+    Endpoint KHUSUS utk fitur "Gambar Polygon di Peta" (frontend Nuxt) --
+    BEDA dari MobilePoolLocViewSet biasa (CRUD 1 titik per request): endpoint
+    ini MENGGANTI SELURUH titik lama milik PoolID ini sekaligus, ATOMIK
+    (delete semua + insert ulang dalam 1 transaksi DB) -- supaya hapus/geser
+    titik di peta tersimpan benar tanpa risiko state gagal-sebagian yang
+    bisa terjadi kalau frontend melakukan banyak request CRUD terpisah
+    (mis. network putus di tengah, sebagian titik lama sudah kehapus tapi
+    titik baru belum semua ke-insert). Padanan persis
+    `iclock/views.py::mobile_pool_loc_draw_save` (dashboard Django).
+    """
+    permission_classes = [IsAuthenticated, IsStaffRole]
+
+    def post(self, request, pool_id):
+        pool_id = (pool_id or '').strip()
+        if not pool_id:
+            return Response({'detail': "PoolID wajib diisi."}, status=status.HTTP_400_BAD_REQUEST)
+
+        points = request.data.get('points', [])
+        if not isinstance(points, list) or len(points) < 3:
+            return Response(
+                {'detail': f"Minimal 3 titik utk jadi polygon valid (sekarang {len(points) if isinstance(points, list) else 0})."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            cleaned_points = [(float(p['lat']), float(p['lng'])) for p in points]
+        except (KeyError, TypeError, ValueError):
+            return Response(
+                {'detail': "Format titik tidak valid -- tiap titik butuh 'lat' & 'lng' numerik."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with db_transaction.atomic():
+            MobilePoolLoc.objects.filter(PoolID=pool_id).delete()
+            MobilePoolLoc.objects.bulk_create([
+                MobilePoolLoc(PoolID=pool_id, Urut=i + 1, Latitude=str(lat), Longitude=str(lng))
+                for i, (lat, lng) in enumerate(cleaned_points)
+            ])
+
+        return Response({
+            'detail': f"Polygon PoolID '{pool_id}' tersimpan ({len(cleaned_points)} titik).",
+            'count': len(cleaned_points),
+        })
 
 
 class PoolDeviceFunctionViewSet(BaseMclockViewSet):
