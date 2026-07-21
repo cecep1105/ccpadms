@@ -87,57 +87,57 @@
                        {% if request.resolver_match.url_name in iclock_names %}bg-slate-800 text-white{% endif %}">
           <span class="shrink-0">🖥️</span>
           <span class="sidebar-label whitespace-nowrap flex-1 text-left">Iclock Management</span>
-          <span id="iclockMenuChevron" class="sidebar-label text-xs transition-transform duration-150"
+          <span id="iclockMenuChevron" class="sidebar-label text-sm transition-transform duration-150"
                 style="{% if request.resolver_match.url_name in iclock_names %}transform: rotate(180deg);{% endif %}">▾</span>
         </button>
         <div id="iclockSubmenu" class="{% if request.resolver_match.url_name not in iclock_names %}hidden{% endif %} pl-8 mt-1 space-y-1">
           <a href="{% url 'iclock:department_list' %}"
-             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+             class="block px-3 py-0.5 rounded-lg hover:bg-slate-800 transition text-sm
                     {% if request.resolver_match.url_name in 'department_list,department_add,department_edit' %}bg-slate-800 text-white{% endif %}">
             <span class="sidebar-label whitespace-nowrap">Department</span>
           </a>
           <a href="{% url 'iclock:active_device_list' %}"
-             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+             class="block px-3 py-0.5 rounded-lg hover:bg-slate-800 transition text-sm
                     {% if request.resolver_match.url_name in 'active_device_list,active_device_add,active_device_edit' %}bg-slate-800 text-white{% endif %}">
             <span class="sidebar-label whitespace-nowrap">Active Device</span>
           </a>
           <a href="{% url 'iclock:registered_device_list' %}"
-             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+             class="block px-3 py-0.5 rounded-lg hover:bg-slate-800 transition text-sm
                     {% if request.resolver_match.url_name in 'registered_device_list,registered_device_add,registered_device_edit' %}bg-slate-800 text-white{% endif %}">
             <span class="sidebar-label whitespace-nowrap">Registered Device</span>
           </a>
           <a href="{% url 'iclock:device_user_list' %}"
-             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+             class="block px-3 py-0.5 rounded-lg hover:bg-slate-800 transition text-sm
                     {% if request.resolver_match.url_name in 'device_user_list,device_user_add,device_user_edit' %}bg-slate-800 text-white{% endif %}">
             <span class="sidebar-label whitespace-nowrap">Employee</span>
           </a>
           <a href="{% url 'iclock:fingerprint_template_list' %}"
-             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+             class="block px-3 py-0.5 rounded-lg hover:bg-slate-800 transition text-sm
                     {% if request.resolver_match.url_name in 'fingerprint_template_list,fingerprint_template_add,fingerprint_template_edit' %}bg-slate-800 text-white{% endif %}">
             <span class="sidebar-label whitespace-nowrap">Fingerprint Template</span>
           </a>
           <a href="{% url 'iclock:transaction_list' %}"
-             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+             class="block px-3 py-0.5 rounded-lg hover:bg-slate-800 transition text-sm
                     {% if request.resolver_match.url_name in 'transaction_list,transaction_add' %}bg-slate-800 text-white{% endif %}">
             <span class="sidebar-label whitespace-nowrap">Transaction</span>
           </a>
           <a href="{% url 'iclock:operation_log_list' %}"
-             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+             class="block px-3 py-0.5 rounded-lg hover:bg-slate-800 transition text-sm
                     {% if request.resolver_match.url_name in 'operation_log_list,operation_log_add,operation_log_edit' %}bg-slate-800 text-white{% endif %}">
             <span class="sidebar-label whitespace-nowrap">Operation Log</span>
           </a>
           <a href="{% url 'iclock:device_log_list' %}"
-             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+             class="block px-3 py-0.5 rounded-lg hover:bg-slate-800 transition text-sm
                     {% if request.resolver_match.url_name in 'device_log_list,device_log_add,device_log_edit' %}bg-slate-800 text-white{% endif %}">
             <span class="sidebar-label whitespace-nowrap">Device Log</span>
           </a>
           <a href="{% url 'iclock:device_command_list' %}"
-             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+             class="block px-3 py-0.5 rounded-lg hover:bg-slate-800 transition text-sm
                     {% if request.resolver_match.url_name in 'device_command_list,device_command_add,device_command_edit' %}bg-slate-800 text-white{% endif %}">
             <span class="sidebar-label whitespace-nowrap">Device Command</span>
           </a>
           <a href="{% url 'iclock:attendance_recap' %}"
-             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+             class="block px-3 py-0.5 rounded-lg hover:bg-slate-800 transition text-sm
                     {% if request.resolver_match.url_name == 'attendance_recap' %}bg-slate-800 text-white{% endif %}">
             <span class="sidebar-label whitespace-nowrap">Attendance Recap</span>
           </a>
@@ -153,47 +153,47 @@
                        {% if request.resolver_match.app_name == 'mclock' %}bg-slate-800 text-white{% endif %}">
           <span class="shrink-0">📱</span>
           <span class="sidebar-label whitespace-nowrap flex-1 text-left">Mobile Attendance</span>
-          <span id="mclockMenuChevron" class="sidebar-label text-xs transition-transform duration-150"
+          <span id="mclockMenuChevron" class="sidebar-label text-sm transition-transform duration-150"
                 style="{% if request.resolver_match.app_name == 'mclock' %}transform: rotate(180deg);{% endif %}">▾</span>
         </button>
         <div id="mclockSubmenu" class="{% if request.resolver_match.app_name != 'mclock' %}hidden{% endif %} pl-8 mt-1 space-y-1">
           <a href="{% url 'mclock:mobile_attendance_table' 'karyawan-mobile' %}"
-             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+             class="block px-3 py-0.5 rounded-lg hover:bg-slate-800 transition text-sm
                     {% if request.resolver_match.kwargs.slug == 'karyawan-mobile' %}bg-slate-800 text-white{% endif %}">
             <span class="sidebar-label whitespace-nowrap">Karyawan Mobile</span>
           </a>
           <a href="{% url 'mclock:mobile_attendance_table' 'driver-mobile' %}"
-             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+             class="block px-3 py-0.5 rounded-lg hover:bg-slate-800 transition text-sm
                     {% if request.resolver_match.kwargs.slug == 'driver-mobile' %}bg-slate-800 text-white{% endif %}">
             <span class="sidebar-label whitespace-nowrap">Driver Mobile</span>
           </a>
           <a href="{% url 'mclock:mobile_attendance_table' 'mitra-mobile' %}"
-             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+             class="block px-3 py-0.5 rounded-lg hover:bg-slate-800 transition text-sm
                     {% if request.resolver_match.kwargs.slug == 'mitra-mobile' %}bg-slate-800 text-white{% endif %}">
             <span class="sidebar-label whitespace-nowrap">Mitra Mobile</span>
           </a>
           <a href="{% url 'mclock:mobile_attendance_table' 'kantin-mobile' %}"
-             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+             class="block px-3 py-0.5 rounded-lg hover:bg-slate-800 transition text-sm
                     {% if request.resolver_match.kwargs.slug == 'kantin-mobile' %}bg-slate-800 text-white{% endif %}">
             <span class="sidebar-label whitespace-nowrap">Kantin Mobile</span>
           </a>
           <a href="{% url 'mclock:mobile_attendance_table' 'kantin-mitra-mobile' %}"
-             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+             class="block px-3 py-0.5 rounded-lg hover:bg-slate-800 transition text-sm
                     {% if request.resolver_match.kwargs.slug == 'kantin-mitra-mobile' %}bg-slate-800 text-white{% endif %}">
             <span class="sidebar-label whitespace-nowrap">Kantin Mitra Mobile</span>
           </a>
           <a href="{% url 'mclock:mobile_pool_list' %}"
-             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+             class="block px-3 py-0.5 rounded-lg hover:bg-slate-800 transition text-sm
                     {% if request.resolver_match.url_name == 'mobile_pool_list' %}bg-slate-800 text-white{% endif %}">
             <span class="sidebar-label whitespace-nowrap">Mobile Pool</span>
           </a>
           <a href="{% url 'mclock:mobile_pool_loc_list' %}"
-             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+             class="block px-3 py-0.5 rounded-lg hover:bg-slate-800 transition text-sm
                     {% if request.resolver_match.url_name == 'mobile_pool_loc_list' %}bg-slate-800 text-white{% endif %}">
             <span class="sidebar-label whitespace-nowrap">Mobile Pool Location</span>
           </a>
           <a href="{% url 'mclock:pool_device_function_list' %}"
-             class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
+             class="block px-3 py-0.5 rounded-lg hover:bg-slate-800 transition text-sm
                     {% if request.resolver_match.url_name == 'pool_device_function_list' or request.resolver_match.url_name == 'pool_device_function_add' or request.resolver_match.url_name == 'pool_device_function_edit' %}bg-slate-800 text-white{% endif %}">
             <span class="sidebar-label whitespace-nowrap">Pool Device Function</span>
           </a>
@@ -254,7 +254,7 @@
 
       <div class="relative shrink-0">
         <button id="userMenuBtn" type="button"
-                class="flex items-center gap-2 sm:gap-3 px-2 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                class="flex items-center gap-2 sm:gap-3 px-2 py-0.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition">
           <div class="text-right hidden sm:block">
             <div class="text-sm font-medium">{{ user.full_name }}</div>
             <div class="text-xs text-slate-400">
