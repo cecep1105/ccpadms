@@ -270,6 +270,8 @@ def checkin_submit(request):
         face_distance=face_dist,
         Function=f'{function_code}-{pool.PoolID}' if function_code else None,
     )
+ 
+
 
     label = 'Check-in' if check_type == AttendanceLog.CheckType.IN else 'Check-out'
     return JsonResponse({

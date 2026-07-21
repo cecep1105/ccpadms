@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block title %}Gambar Polygon di Peta{% endblock %}
+{% block page_title %}Mobile Attendance — Gambar Polygon Geofence{% endblock %}
+{% block content %}
+
+<div class="mb-4">
+  <a href="{% url 'mclock:mobile_pool_loc_list' %}" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
+    &larr; Kembali ke Mobile Pool Location
+  </a>
+</div>
+
+{% if not google_maps_api_key %}
+<div class="p-4 rounded-lg bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 text-sm text-rose-700 dark:text-rose-300">
+  ⚠️ <strong>GOOGLE_MAPS_API_KEY</strong> belum diisi di <code>.env</code> — peta tidak bisa dimuat.
+  Buat API key dari <a href="https://console.cloud.google.com/google/maps-apis" target="_blank" class="underline">Google Cloud Console</a>
+  (aktifkan "Maps JavaScript API"), isi <code>GOOGLE_MAPS_API_KEY=...</code> di <code>.env</code>, lalu restart server.
+</div>
+{% else %}
+
+<div class="mb-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-sm text-amber-800 dark:text-amber-300">
+  🧪 Data di sini murni utk <strong>testing</strong> geofence — akan <strong>hilang/tertimpa</strong> begitu
+  <code>sync_mobile_pool_loc</code> dijalankan lagi. Klik di peta utk tambah titik (urutan klik = urutan
+  keliling polygon), minimal 3 titik. Menyimpan akan <strong>mengganti seluruh titik lama</strong> milik
+  PoolID ini (bukan menambah).
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+  <div class="lg:col-span-2">
+    <div id="map" class="w-full h-[520px] rounded-xl border dark:border-slate-700 bg-slate-100 dark:bg-slate-800"></div>
+  </div>
+
+  <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 p-4 space-y-4 h-fit">
+    <div>
+      <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">PoolID</label>
+      <input type="text" id="poolIdInput" value="{{ pool_id }}" list="poolIdList"
+             class="w-full px-3 py-2 border dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
+             placeholder="mis. TEST1 — sama dgn PoolID di Mobile Pool">
+      <datalist id="poolIdList">
+        {% for pid, pname in known_pool_ids %}
+        <option value="{{ pid }}">{{ pname }}</option>
+        {% endfor %}
+      </datalist>
+    </div>
+
+    <div>
+      <p class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Titik Polygon (<span id="pointCount">0</span>)</p>
+      <ol id="pointList" class="text-xs text-slate-500 dark:text-slate-400 space-y-1 max-h-48 overflow-y-auto font-mono"></ol>
+    </div>
+
+    <div class="flex gap-2">
+      <button type="button" id="undoBtn" class="flex-1 px-3 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg text-sm">
+        Hapus Titik Terakhir
+      </button>
+      <button type="button" id="clearBtn" class="flex-1 px-3 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg text-sm">
+        Hapus Semua
+      </button>
+    </div>
+
+    <button type="button" id="saveBtn" class="w-full px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium">
+      Simpan Polygon
+    </button>
+
+    <div id="statusBox" class="hidden text-sm p-3 rounded-lg"></div>
+  </div>
+</div>
+
+<script>
+let map, polygon, markers = [];
+const existingPoints = {{ existing_points_json|safe }};
+const savePoolId = {{ pool_id|yesno:"true,false" }} ? "{{ pool_id }}" : null;
+
+function getCookie(name) {
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return parts.pop().split(';').shift();
+  return '';
+}
+
+function initMap() {
+  const initialCenter = existingPoints.length > 0
+    ? { lat: parseFloat(existingPoints[0].Latitude), lng: parseFloat(existingPoints[0].Longitude) }
+    : { lat: -6.2000, lng: 106.8166 };
+
+  map = new google.maps.Map(document.getElementById('map'), {
+    center: initialCenter,
+    zoom: 18,
+    mapTypeId: 'satellite',
+  });
+
+  polygon = new google.maps.Polygon({
+    paths: [],
+    strokeColor: '#4f46e5',
+    strokeOpacity: 0.9,
+    strokeWeight: 2,
+    fillColor: '#4f46e5',
+    fillOpacity: 0.25,
+  });
+  polygon.setMap(map);
+
+  map.addListener('click', (e) => addPoint(e.latLng.lat(), e.latLng.lng()));
+
+  existingPoints.forEach((p) => addPoint(parseFloat(p.Latitude), parseFloat(p.Longitude)));
+}
+
+function addPoint(lat, lng) {
+  const marker = new google.maps.Marker({
+    position: { lat, lng },
+    map,
+    label: String(markers.length + 1),
+    draggable: true,
+  });
+  marker.addListener('dragend', updatePolygon);
+  markers.push(marker);
+  updatePolygon();
+}
+
+function updatePolygon() {
+  polygon.setPath(markers.map((m) => m.getPosition()));
+  renderPointList();
+}
+
+function renderPointList() {
+  document.getElementById('pointCount').textContent = markers.length;
+  const list = document.getElementById('pointList');
+  list.innerHTML = '';
+  markers.forEach((m, i) => {
+    const pos = m.getPosition();
+    const li = document.createElement('li');
+    li.textContent = `#${i + 1}: ${pos.lat().toFixed(6)}, ${pos.lng().toFixed(6)}`;
+    list.appendChild(li);
+  });
+}
+
+document.getElementById('undoBtn').addEventListener('click', () => {
+  const last = markers.pop();
+  if (last) last.setMap(null);
+  markers.forEach((m, i) => m.setLabel(String(i + 1)));
+  updatePolygon();
+});
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  markers.forEach((m) => m.setMap(null));
+  markers = [];
+  updatePolygon();
+});
+
+function showStatus(message, isSuccess) {
+  const statusBox = document.getElementById('statusBox');
+  statusBox.classList.remove(
+    'hidden', 'bg-emerald-50', 'dark:bg-emerald-950/30', 'text-emerald-700', 'dark:text-emerald-400',
+    'bg-rose-50', 'dark:bg-rose-950/30', 'text-rose-700', 'dark:text-rose-400',
+  );
+  if (isSuccess) {
+    statusBox.classList.add('bg-emerald-50', 'dark:bg-emerald-950/30', 'text-emerald-700', 'dark:text-emerald-400');
+  } else {
+    statusBox.classList.add('bg-rose-50', 'dark:bg-rose-950/30', 'text-rose-700', 'dark:text-rose-400');
+  }
+  statusBox.textContent = message;
+}
+
+document.getElementById('saveBtn').addEventListener('click', () => {
+  const poolId = document.getElementById('poolIdInput').value.trim();
+  if (!poolId) {
+    showStatus('PoolID wajib diisi.', false);
+    return;
+  }
+  if (markers.length < 3) {
+    showStatus(`Minimal 3 titik utk jadi polygon valid (sekarang ${markers.length}).`, false);
+    return;
+  }
+
+  const points = markers.map((m) => ({ lat: m.getPosition().lat(), lng: m.getPosition().lng() }));
+
+  fetch(`/admin/mclock/mobile-pool-loc/draw/${encodeURIComponent(poolId)}/save/`, {
+    method: 'POST',
+    headers: { 'X-CSRFToken': getCookie('csrftoken'), 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `points=${encodeURIComponent(JSON.stringify(points))}`,
+  })
+    .then((r) => r.json())
+    .then((data) => {
+      showStatus(data.message, data.success);
+      if (data.success) {
+        setTimeout(() => { window.location.href = "{% url 'mclock:mobile_pool_loc_list' %}"; }, 1500);
+      }
+    })
+    .catch(() => showStatus('Gagal menghubungi server.', false));
+});
+</script>
+<script async src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=initMap"></script>
+
+{% endif %}
+{% endblock %}

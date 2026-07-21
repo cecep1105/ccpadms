@@ -35,10 +35,16 @@
       </select>
     </label>
   </form>
-  <a href="{% url 'mclock:mobile_pool_loc_add' %}"
-     class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium text-center shrink-0">
-    + Tambah Titik (Testing)
-  </a>
+  <div class="flex gap-2">
+    <a href="{% url 'mclock:mobile_pool_loc_draw' %}"
+       class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium text-center shrink-0">
+      🗺️ Gambar Polygon di Peta
+    </a>
+    <a href="{% url 'mclock:mobile_pool_loc_add' %}"
+       class="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg text-sm font-medium text-center shrink-0">
+      + Tambah Titik Manual
+    </a>
+  </div>
 </div>
 
 <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 overflow-x-auto">
@@ -79,6 +85,10 @@
         <td class="px-3 py-1 text-slate-500 dark:text-slate-400">{{ row.latest_synced|date:"d M Y H:i"|default:"-" }}</td>
         <td class="px-3 py-1 text-right">
           <div class="flex justify-end gap-2">
+            <a href="{% url 'mclock:mobile_pool_loc_draw_edit' row.pool_id %}"
+               class="px-2.5 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-xs font-medium">
+              🗺️ Edit di Peta
+            </a>
             <button type="button" class="loc-detail-toggle px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-xs font-medium"
                     data-target="loc-detail-{{ forloop.counter }}">
               Lihat Titik ▾

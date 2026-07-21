@@ -80,7 +80,7 @@
         <span class="shrink-0">👥</span> <span class="sidebar-label whitespace-nowrap">Manajemen User</span>
       </a>
 
-      {% with iclock_names='department_list,department_add,department_edit,active_device_list,active_device_add,active_device_edit,registered_device_list,registered_device_add,registered_device_edit,device_user_list,device_user_add,device_user_edit,fingerprint_template_list,fingerprint_template_add,fingerprint_template_edit,transaction_list,transaction_add,transaction_edit,operation_log_list,operation_log_add,operation_log_edit,device_log_list,device_log_add,device_log_edit,device_command_list,device_command_add,device_command_edit,attendance_recap' %}
+      {% with iclock_names='department_list,department_add,department_edit,active_device_list,active_device_add,active_device_edit,registered_device_list,registered_device_add,registered_device_edit,device_user_list,device_user_add,device_user_edit,fingerprint_template_list,fingerprint_template_add,fingerprint_template_edit,transaction_list,transaction_add,operation_log_list,operation_log_add,operation_log_edit,device_log_list,device_log_add,device_log_edit,device_command_list,device_command_add,device_command_edit,attendance_recap' %}
       <div>
         <button type="button" id="iclockMenuToggle"
                 class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800 transition text-sm
@@ -118,7 +118,7 @@
           </a>
           <a href="{% url 'iclock:transaction_list' %}"
              class="block px-3 py-1.5 rounded-lg hover:bg-slate-800 transition text-sm
-                    {% if request.resolver_match.url_name in 'transaction_list,transaction_add,transaction_edit' %}bg-slate-800 text-white{% endif %}">
+                    {% if request.resolver_match.url_name in 'transaction_list,transaction_add' %}bg-slate-800 text-white{% endif %}">
             <span class="sidebar-label whitespace-nowrap">Transaction</span>
           </a>
           <a href="{% url 'iclock:operation_log_list' %}"

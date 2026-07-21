@@ -17,24 +17,25 @@
     </div>
   </div>
   <canvas id="canvas" class="hidden"></canvas>
-  <p class="text-center text-xs text-slate-400 dark:text-slate-500 mt-3">Posisikan wajah Anda di dalam bingkai</p>
+  <div class="grid grid-cols-2 gap-3 mt-1">
+    <button type="button" id="checkinBtn" {% if not has_face_profile %}disabled{% endif %}
+            class="flex flex-row items-center justify-center gap-1 py-1 bg-emerald-500 hover:bg-emerald-600 active:scale-[0.97] text-white rounded-3xl font-bold shadow-lg shadow-emerald-500/20 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100">
+      <span class="text-sm">✅</span>
+      <span>Check-in</span>
+    </button>
+    <button type="button" id="checkoutBtn" {% if not has_face_profile %}disabled{% endif %}
+            class="flex flex-row items-center justify-center gap-1 py-1 bg-amber-500 hover:bg-amber-600 active:scale-[0.97] text-white rounded-3xl font-bold shadow-lg shadow-amber-500/20 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100">
+      <span class="text-sm">🚪</span>
+      <span>Check-out</span>
+    </button>
+  </div>
+  <p class="text-center text-xs text-slate-400 dark:text-slate-500 mt-1">Posisikan wajah Anda di dalam bingkai</p>
 </div>
 
 <div id="statusBox" class="hidden rounded-2xl p-4 text-sm mb-4 text-center font-medium"></div>
 <div id="coordsBox" class="hidden mb-4 text-center text-xs text-slate-300 dark:text-slate-600 font-mono"></div>
 
-<div class="grid grid-cols-2 gap-3">
-  <button type="button" id="checkinBtn" {% if not has_face_profile %}disabled{% endif %}
-          class="flex flex-col items-center justify-center gap-1 py-5 bg-emerald-500 hover:bg-emerald-600 active:scale-[0.97] text-white rounded-3xl font-bold shadow-lg shadow-emerald-500/20 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100">
-    <span class="text-2xl">✅</span>
-    <span>Check-in</span>
-  </button>
-  <button type="button" id="checkoutBtn" {% if not has_face_profile %}disabled{% endif %}
-          class="flex flex-col items-center justify-center gap-1 py-5 bg-amber-500 hover:bg-amber-600 active:scale-[0.97] text-white rounded-3xl font-bold shadow-lg shadow-amber-500/20 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100">
-    <span class="text-2xl">🚪</span>
-    <span>Check-out</span>
-  </button>
-</div>
+
 
 {% endblock %}
 

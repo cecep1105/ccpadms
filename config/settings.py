@@ -342,6 +342,16 @@ CACHES = {
 PUSHSDK_BASE_DIR = env('PUSHSDK_BASE_DIR', default=str(BASE_DIR / 'data'))
 
 # ---------------------------------------------------------------------------
+# Google Maps JavaScript API -- dipakai halaman "Gambar Polygon di Peta"
+# (mclock, Mobile Pool Location) supaya admin bisa klik titik-titik geofence
+# LANGSUNG di peta, bukan ketik koordinat manual satu-satu. WAJIB diisi di
+# .env (GOOGLE_MAPS_API_KEY=...) -- kosong = halaman peta akan tampilkan
+# pesan jelas ke admin (bukan diam-diam gagal/blank).
+# ---------------------------------------------------------------------------
+GOOGLE_MAPS_API_KEY = env('GOOGLE_MAPS_API_KEY', default='')
+
+
+# ---------------------------------------------------------------------------
 # Celery -- dipakai utk lempar proses berat/CPU-intensive (face recognition,
 # lihat mattendance/tasks.py) ke WORKER TERPISAH, supaya tidak membebani
 # proses Django/Daphne utama yang juga menangani request lain + WebSocket.

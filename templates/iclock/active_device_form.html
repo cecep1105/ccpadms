@@ -36,6 +36,61 @@
       <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Timezone Offset</label>
       {{ form.TZAdj }}
     </div>
+
+    <div class="pt-2 border-t dark:border-slate-700">
+      <p class="text-sm font-semibold text-slate-600 dark:text-slate-300 mt-3 mb-1">Konfigurasi PUSH SDK</p>
+      <p class="text-xs text-slate-400 dark:text-slate-500 mb-3">
+        Dikirim ke device sbg respons konfigurasi server -- biasanya tidak perlu diubah manual
+        kecuali sedang troubleshoot/menyesuaikan perilaku device tertentu.
+      </p>
+    </div>
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Error Delay (detik)</label>
+        {{ form.ErrorDelay }}
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Delay (detik)</label>
+        {{ form.Delay }}
+      </div>
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Trans Times</label>
+      {{ form.TransTimes }}
+    </div>
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Trans Interval (menit)</label>
+        {{ form.TransInterval }}
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Trans Flag (UpdateDB)</label>
+        {{ form.UpdateDB }}
+      </div>
+    </div>
+    <div class="flex gap-6">
+      <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+        {{ form.Realtime }} Realtime
+      </label>
+      <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+        {{ form.Encrypt }} Encrypt
+      </label>
+    </div>
+    <div class="grid grid-cols-3 gap-4">
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Log Stamp</label>
+        {{ form.LogStamp }}
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">OpLog Stamp</label>
+        {{ form.OpLogStamp }}
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Photo Stamp</label>
+        {{ form.PhotoStamp }}
+      </div>
+    </div>
+
     {% if form.errors %}
     <div class="text-sm text-rose-600 dark:text-rose-400">Periksa kembali data yang dimasukkan.</div>
     {% endif %}

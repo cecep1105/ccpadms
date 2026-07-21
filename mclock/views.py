@@ -1,7 +1,9 @@
+import json
+
 from django.conf import settings
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.http import Http404
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
@@ -314,6 +316,72 @@ def mobile_pool_loc_add(request):
         )
         return redirect('mclock:mobile_pool_loc_add')
     return render(request, 'mclock/mobile_pool_loc_form.html', {'form': form})
+
+
+@staff_required
+def mobile_pool_loc_draw(request, pool_id=None):
+    """
+    "Gambar Polygon di Peta" -- alternatif yang JAUH lebih praktis dari
+    mobile_pool_loc_add (ketik koordinat manual satu-satu): admin klik
+    titik-titik LANGSUNG di Google Maps, urutan klik otomatis jadi urutan
+    keliling polygon, submit sekali jadi semua titik.
+
+    Kalau `pool_id` diisi DAN sudah ada titik tersimpan -- titik yang SUDAH
+    ADA dimuat ke peta sbg polygon yang bisa diedit (tambah/hapus/geser
+    titik), bukan mulai dari kosong. Simpan MENGGANTI SELURUH titik lama
+    milik PoolID ini (replace-all, bukan tambah) -- sesuai sifat data ini
+    yang "murni testing, akan tertimpa sync" (sama seperti mobile_pool_loc_add).
+    """
+    existing_points = []
+    if pool_id:
+        existing_points = list(
+            MobilePoolLoc.objects.filter(PoolID=pool_id).order_by('Urut').values('Latitude', 'Longitude')
+        )
+
+    known_pool_ids = list(MobilePool.objects.order_by('PoolID').values_list('PoolID', 'PoolName'))
+
+    return render(request, 'mclock/mobile_pool_loc_draw.html', {
+        'pool_id': pool_id or '',
+        'existing_points_json': json.dumps(existing_points),
+        'known_pool_ids': known_pool_ids,
+        'google_maps_api_key': settings.GOOGLE_MAPS_API_KEY,
+    })
+
+
+@staff_required
+@require_POST
+def mobile_pool_loc_draw_save(request, pool_id):
+    """
+    Simpan HASIL gambar polygon dari peta -- body POST berisi `points`
+    (JSON array [{lat, lng}, ...], urutan klik = urutan Urut). MENGGANTI
+    SELURUH titik lama milik PoolID ini (delete semua, insert ulang sesuai
+    urutan baru) -- supaya hapus titik di peta juga tersimpan benar (bukan
+    cuma tambah/update).
+    """
+    pool_id = pool_id.strip()
+    if not pool_id:
+        return JsonResponse({'success': False, 'message': "PoolID wajib diisi."}, status=400)
+
+    try:
+        points = json.loads(request.POST.get('points', '[]'))
+    except (json.JSONDecodeError, TypeError):
+        return JsonResponse({'success': False, 'message': "Data titik tidak valid (bukan JSON)."}, status=400)
+
+    if len(points) < 3:
+        return JsonResponse({'success': False, 'message': f"Minimal 3 titik utk jadi polygon valid (sekarang {len(points)})."}, status=400)
+
+    try:
+        cleaned_points = [(float(p['lat']), float(p['lng'])) for p in points]
+    except (KeyError, TypeError, ValueError):
+        return JsonResponse({'success': False, 'message': "Format titik tidak valid -- tiap titik butuh 'lat' & 'lng' numerik."}, status=400)
+
+    MobilePoolLoc.objects.filter(PoolID=pool_id).delete()
+    MobilePoolLoc.objects.bulk_create([
+        MobilePoolLoc(PoolID=pool_id, Urut=i + 1, Latitude=str(lat), Longitude=str(lng))
+        for i, (lat, lng) in enumerate(cleaned_points)
+    ])
+
+    return JsonResponse({'success': True, 'message': f"Polygon PoolID '{pool_id}' tersimpan ({len(cleaned_points)} titik).", 'count': len(cleaned_points)})
 
 
 @staff_required
