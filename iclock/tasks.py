@@ -59,7 +59,7 @@ def _get_or_create_employee(normalized_pin: str, raw_pin: str, device, log_prefi
     return emp, created
 
 
-def _refresh_employee_last_seen(emp, device, timestamp) -> bool:
+def _refresh_employee_last_seen(emp, device, timestamp, mobile_pool_id=None) -> list:
     """
     Update SN & UTime employee ini ke device & waktu ATTLOG TERBARU --
     dipakai utk tahu "terakhir check-in kapan & di device mana" (BEDA dari
@@ -70,13 +70,30 @@ def _refresh_employee_last_seen(emp, device, timestamp) -> bool:
     sudah tersimpan -- ATTLOG bisa datang TIDAK berurutan (device retry
     kirim data lama, atau beberapa device kirim hampir bersamaan), jangan
     sampai transaksi LAMA menimpa catatan "terakhir" yang sudah lebih baru.
-    Return True kalau ADA perubahan (caller perlu .save()).
+
+    `mobile_pool_id`: OPSIONAL -- diisi HANYA dari konteks konsolidasi
+    mobile (write_mobile_attlog_to_iclock), karena SN device finger biasa
+    SUDAH cukup mewakili PoolID-nya sendiri, TAPI SN mobile SELALU
+    'ABSENDIGITAL01' (semua PoolID mobile digabung 1 SN yang sama) --
+    `employee.LastVerify` inilah yang menyimpan PoolID mobile SPESIFIK-nya
+    (dipakai `employee.LastPool()`/`LastDevice()` utk tampilan).
+
+    Return list NAMA FIELD yang BERUBAH (kosong kalau timestamp tidak
+    lebih baru -- tidak ada perubahan sama sekali), dipakai caller
+    langsung sbg `update_fields` di .save().
     """
     if emp.UTime is not None and emp.UTime >= timestamp:
-        return False
+        return []
     emp.SN = device
     emp.UTime = timestamp
-    return True
+    changed = ['SN', 'UTime']
+    if mobile_pool_id is not None:
+        try:
+            emp.LastVerify = int(mobile_pool_id)
+            changed.append('LastVerify')
+        except (TypeError, ValueError):
+            logger.warning("_refresh_employee_last_seen: mobile_pool_id '%s' bukan angka, LastVerify dilewati.", mobile_pool_id)
+    return changed
 
 
 def _maybe_retry_name_lookup(emp, raw_pin: str) -> bool:
@@ -148,8 +165,7 @@ def write_attlog_to_db(self, sn: str, pin: str, timestamp_iso: str, check_type: 
     # lookup nama kalau masih kosong -- keduanya digabung jadi 1 save() biar
     # tidak double query UPDATE tiap transaksi (volume ATTLOG bisa tinggi).
     update_fields = []
-    if _refresh_employee_last_seen(emp, device, timestamp):
-        update_fields += ['SN', 'UTime']
+    update_fields += _refresh_employee_last_seen(emp, device, timestamp)
     if not emp_created and _maybe_retry_name_lookup(emp, pin):
         update_fields.append('EName')
     if update_fields:
@@ -269,5 +285,53 @@ def write_fplog_to_db(self, sn: str, fields: str):
     fp, created = fptemp.objects.update_or_create(
         UserID=emp, FingerID=fid,
         defaults={'Template': template, 'Valid': valid, 'SN': device},
+    )
+    return {'success': True, 'created': created}
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=10)
+def write_mobile_attlog_to_iclock(self, pin, timestamp_iso, check_type, function_code, pool_id):
+    """
+    Tulis 1 event check-in/out/meal MOBILE (app mattendance) ke tabel
+    `transaction` iclock, dengan SN='ABSENDIGITAL01' (device virtual
+    gabungan). BEDA dari write_attlog_to_db (dipanggil endpoint push
+    protocol device fisik): Function & Verify di sini diambil LANGSUNG
+    dari caller (sudah dihitung mattendance sendiri), BUKAN di-derive
+    ulang dari prefix PIN (determine_transaction_function) -- device
+    gabungan ini tidak punya konsep "Function per-device fisik" yang sama.
+
+    `pool_id` JUGA diteruskan ke `_refresh_employee_last_seen` sbg
+    `mobile_pool_id` -- mengisi `employee.LastVerify`, supaya
+    `employee.LastPool()`/`LastDevice()` bisa membedakan lokasi mobile
+    SPESIFIK-nya (SN='ABSENDIGITAL01' sendirian tidak cukup, semua PoolID
+    mobile digabung 1 SN yang sama).
+    """
+    device = iclock.get_cached('ABSENDIGITAL01')
+    if device is None:
+        logger.warning("Task DB-write MOBILE ATTLOG: device 'ABSENDIGITAL01' tidak/tidak lagi ada di Active Device -- dilewati.")
+        return {'success': False, 'skipped': True, 'error': "Device 'ABSENDIGITAL01' tidak ditemukan"}
+
+    normalized_pin = normalize_pin(pin)
+    emp, emp_created = _get_or_create_employee(normalized_pin, pin, device, 'Task DB-write MOBILE ATTLOG')
+
+    timestamp = parse_datetime(timestamp_iso)
+    if timestamp is None:
+        logger.warning("Task DB-write MOBILE ATTLOG: timestamp '%s' tidak valid -- dilewati.", timestamp_iso)
+        return {'success': False, 'error': 'Timestamp tidak valid'}
+
+    update_fields = []
+    update_fields += _refresh_employee_last_seen(emp, device, timestamp, mobile_pool_id=pool_id)
+    if not emp_created and _maybe_retry_name_lookup(emp, pin):
+        update_fields.append('EName')
+    if update_fields:
+        emp.save(update_fields=update_fields)
+
+    try:
+        verify_value = int(pool_id)
+    except (TypeError, ValueError):
+        verify_value = 0
+
+    _trx, created = transaction.objects.get_or_create(
+        UserID=emp, TTime=timestamp, SN=device,
+        defaults={'State': check_type, 'Verify': verify_value, 'Function': function_code or None},
     )
     return {'success': True, 'created': created}

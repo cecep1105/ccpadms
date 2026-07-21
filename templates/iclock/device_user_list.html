@@ -47,15 +47,13 @@
           </a>
         </th>
         <th class="px-3 py-1">
-          <a href="{{ sort_urls.dept }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
-            Pool {% if sort == 'dept' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
-          </a>
-        </th>
-        <th class="px-3 py-1">
           <a href="{{ sort_urls.device }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
             Device {% if sort == 'device' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
           </a>
         </th>
+        <th class="px-3 py-1" title="Pool tempat check-in/out/meal TERAKHIR (bukan Pool registrasi) -- utk mobile, di-lookup dari PoolID mobile terakhir">Last Pool</th>
+        <th class="px-3 py-1" title="Device check-in/out/meal TERAKHIR -- 'Mobile' kalau lewat absen mobile">Last Device</th>
+        <th class="px-3 py-1" title="Waktu check-in/out/meal TERAKHIR (dari device fisik ATAU mobile)">Last Seen</th>
         <th class="px-3 py-1">
           <a href="{{ sort_urls.gender }}" class="inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100">
             Gender {% if sort == 'gender' %}<span class="text-[10px]">{% if dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
@@ -79,8 +77,12 @@
       <tr class="border-t dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/40">
         <td class="px-3 py-1 font-medium">{{ e.PIN }}</td>
         <td class="px-3 py-1">{{ e.EName|default:"-" }}</td>
-        <td class="px-3 py-1">{{ e.DeptID|default:"-" }}</td>
         <td class="px-3 py-1">{{ e.SN|default:"-" }}</td>
+        <td class="px-3 py-1 text-slate-500 dark:text-slate-400">{{ e.LastPool|default:"-" }}</td>
+        <td class="px-3 py-1 text-slate-500 dark:text-slate-400">
+          {% if e.LastDevice == "Mobile" %}<span class="text-indigo-600 dark:text-indigo-400">📱 Mobile</span>{% else %}{{ e.LastDevice|default:"-" }}{% endif %}
+        </td>
+        <td class="px-3 py-1 text-slate-500 dark:text-slate-400">{{ e.UTime|date:"d M Y H:i"|default:"-" }}</td>
         <td class="px-3 py-1">{{ e.get_Gender_display|default:"-" }}</td>
         <td class="px-3 py-1">
           {% if e.Privilege == 14 %}
@@ -128,7 +130,7 @@
         </td>
       </tr>
       {% empty %}
-      <tr><td colspan="8" class="px-5 py-8 text-center text-slate-400 dark:text-slate-500">Tidak ada device user ditemukan</td></tr>
+      <tr><td colspan="10" class="px-5 py-8 text-center text-slate-400 dark:text-slate-500">Tidak ada device user ditemukan</td></tr>
       {% endfor %}
     </tbody>
   </table>

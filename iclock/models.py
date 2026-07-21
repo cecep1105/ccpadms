@@ -422,6 +422,19 @@ class employee(models.Model):
         help_text='Password (di-hash) login Mobile Attendance via PIN. Kosong = belum pernah diganti dari default.',
     )
 
+    # Field TAMBAHAN -- menampung kode Pool (PoolID mclock.MobilePool)
+    # TERAKHIR employee ini check-in/out/meal via MOBILE. Diisi bersamaan
+    # dgn SN/UTime saat konsolidasi mobile->iclock (lihat
+    # iclock/tasks.py::_refresh_employee_last_seen). Device finger biasa
+    # TIDAK mengisi field ini (PoolID-nya sudah terwakili lewat SN device
+    # fisik itu sendiri) -- HANYA relevan saat SN == 'ABSENDIGITAL01' (device
+    # virtual gabungan mobile, semua PoolID digabung 1 SN yang sama, jadi
+    # butuh field terpisah utk tahu PoolID SPESIFIK-nya).
+    LastVerify = models.IntegerField(
+        _('Last Mobile PoolID'), null=True, blank=True,
+        help_text="Kode Pool (PoolID mobile) terakhir -- cuma terisi kalau check-in terakhir lewat mobile (SN='ABSENDIGITAL01').",
+    )
+
     class Meta:
         db_table = 'userinfo'
         managed = True
@@ -430,6 +443,42 @@ class employee(models.Model):
 
     def __str__(self):
         return f'{self.PIN} - {self.EName}' if self.EName and self.EName.strip() else self.PIN
+
+    def LastPool(self):
+        """
+        Nama Pool TERAKHIR employee ini check-in/out/meal. Utk device
+        finger biasa, diambil dari Pool device tsb (SN.DeptID.DeptName --
+        PoolID-nya sudah terwakili lewat device fisik itu sendiri). Utk
+        MOBILE (SN == 'ABSENDIGITAL01', device virtual gabungan semua
+        mobile), Pool device itu SENDIRI tidak mencerminkan lokasi
+        SPESIFIK (semua mobile digabung 1 SN yg sama) -- jadi di-lookup
+        dari `LastVerify` (PoolID mobile) ke mclock.MobilePool.PoolName.
+        Return None kalau belum pernah check-in sama sekali.
+        """
+        if self.SN_id is None:
+            return None
+        if self.SN_id == 'ABSENDIGITAL01':
+            if self.LastVerify is None:
+                return None
+            from mclock.models import MobilePool
+            pool = MobilePool.objects.filter(PoolID=str(self.LastVerify)).first()
+            return pool.PoolName if pool and pool.PoolName else f'Mobile (Pool {self.LastVerify})'
+        if self.SN.DeptID_id:
+            return self.SN.DeptID.DeptName
+        return None
+
+    def LastDevice(self):
+        """
+        Device TERAKHIR employee ini check-in/out/meal -- 'Mobile' kalau
+        lewat absen mobile (device virtual gabungan 'ABSENDIGITAL01'),
+        selain itu Alias device fisiknya. Return None kalau belum pernah
+        check-in sama sekali.
+        """
+        if self.SN_id is None:
+            return None
+        if self.SN_id == 'ABSENDIGITAL01':
+            return f'Mobile-{self.LastVerify}'
+        return self.SN.Alias or self.SN_id
 
 
 class fptemp(models.Model):

@@ -632,7 +632,7 @@ def device_user_list(request):
     direction = request.GET.get('dir', 'asc') if request.GET.get('dir') in ('asc', 'desc') else 'asc'
     page_size = _resolve_page_size(request)
 
-    qs = employee.objects.select_related('DeptID', 'SN').all()
+    qs = employee.objects.select_related('DeptID', 'SN', 'SN__DeptID').all()
     if pin_filter:
         qs = qs.filter(PIN__icontains=pin_filter)
     if name_filter:

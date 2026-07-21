@@ -17,6 +17,7 @@ from .function_utils import determine_function_code
 from .geofence import find_all_matching_pools_by_polygon, find_matching_pool_by_polygon
 from .models import AttendanceLog, FaceProfile
 from .qr_utils import get_poolcode_from_qr
+from .services import maybe_consolidate_to_iclock
 from .tasks import extract_face_encoding_task, verify_face_task
 
 PAGE_SIZE_OPTIONS = [10, 15, 25, 50, 100]
@@ -270,6 +271,7 @@ def checkin_submit(request):
         face_distance=face_dist,
         Function=f'{function_code}-{pool.PoolID}' if function_code else None,
     )
+    maybe_consolidate_to_iclock(log)
  
 
 
@@ -377,6 +379,7 @@ def checkin_meal_submit(request):
         qr_content=qr_content,
         Function=f'{function_code}-{matched_pool.PoolID}' if function_code else None,
     )
+    maybe_consolidate_to_iclock(log)
 
     return JsonResponse({
         'success': True,

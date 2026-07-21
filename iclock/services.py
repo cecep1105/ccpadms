@@ -99,6 +99,12 @@ def activate_device_to_iclock(registered_device: RegisteredDevice) -> bool:
         DeptID=registered_device.DeptID,
         IPAddress=registered_device.IPAddress,
         MAC=registered_device.MAC,
+        # BUG FIX: Function SEBELUMNYA tidak ikut disalin -- kalau admin
+        # ubah Function (mis. TESTING -> KANTIN) BERSAMAAN dgn ubah Pool
+        # dari guest ke non-guest di form yang SAMA, hasil salinan ke
+        # Active Device diam-diam tetap Function default ('0'), harus
+        # diedit ULANG manual di Active Device -- sekarang ikut tersalin.
+        Function=registered_device.Function or '0',
     )
     return True
 
@@ -307,3 +313,37 @@ def determine_transaction_function(raw_pin: str, device) -> str | None:
         if key != 'X' and first_char in key:
             return key
     return None
+
+def consolidate_mobile_attendance_to_iclock(pin: str, timestamp, checktype: str, function_code: str, pool_id) -> None:
+    """
+    Konsolidasi 1 event check-in/out/meal MOBILE (app mattendance) ke text
+    file ATTLOG + tabel `transaction` iclock, dengan SN='ABSENDIGITAL01'
+    (device virtual gabungan yang mewakili SEMUA device absen mobile) --
+    HANYA kalau device itu SUDAH ada di Active Device (admin yang setup
+    manual dari dashboard, TIDAK dibuat otomatis di sini). Kalau belum
+    ada, TIDAK melakukan apa pun (silent no-op).
+
+    Args:
+        pin: PIN mentah Employee (Employee.PIN, BUKAN username akun).
+        timestamp: datetime saat check-in/out/meal ini terjadi.
+        checktype: 'IN'/'OUT'/'MEAL' (mattendance.AttendanceLog.CheckType)
+            -- di sini di-mapping ke checktype iclock (0=in, 1=out); MEAL
+            SENGAJA di-mapping jadi checkout ('1'), sesuai instruksi.
+        function_code: kode fungsi BARE (mis. '89'), BUKAN format gabungan
+            'kode-poolid' yang dipakai AttendanceLog.Function -- caller
+            wajib split dulu (lihat mattendance/services.py).
+        pool_id: PoolID (mclock.MobilePool) tempat check-in/out/meal ini
+            terjadi -- disimpan ke field `Verify` (BUKAN kode verifikasi
+            device biasa 0/1/2 -- field ini di-reuse utk device gabungan
+            mobile) & ke `employee.LastVerify`.
+    """
+    if not iclock.objects.filter(SN='ABSENDIGITAL01').exists():
+        return
+
+    ic_checktype = '0' if checktype == 'IN' else '1'  # OUT & MEAL keduanya jadi '1' (checkout)
+
+    from .pushsdk_writer import append_attlog_line
+    append_attlog_line('ABSENDIGITAL01', pin, timestamp, ic_checktype, pool_id or '')
+
+    from .tasks import write_mobile_attlog_to_iclock
+    write_mobile_attlog_to_iclock.delay(pin, timestamp.isoformat(), ic_checktype, function_code or '', str(pool_id or ''))

@@ -27,6 +27,7 @@ from .function_utils import determine_function_code
 from .geofence import find_all_matching_pools_by_polygon, find_matching_pool_by_polygon
 from .models import AttendanceLog, FaceProfile
 from .qr_utils import get_poolcode_from_qr
+from .services import maybe_consolidate_to_iclock
 from .serializers import (
     AttendanceLogSerializer,
     CheckinMealSerializer,
@@ -284,6 +285,7 @@ class CheckinAPIView(APIView):
             face_distance=result['distance'],
             Function=f'{function_code}-{pool.PoolID}' if function_code else None,
         )
+        maybe_consolidate_to_iclock(log)
         label = 'Check-in' if data['check_type'] == AttendanceLog.CheckType.IN else 'Check-out'
         return Response({
             'detail': f'{label} berhasil di {pool.PoolName or pool.PoolID}.',
@@ -332,6 +334,7 @@ class CheckinMealAPIView(APIView):
             qr_content=data['qr_content'],
             Function=f'{function_code}-{matched_pool.PoolID}' if function_code else None,
         )
+        maybe_consolidate_to_iclock(log)
         return Response({
             'detail': f'Check/Meal berhasil di {matched_pool.PoolName or matched_pool.PoolID}.',
             'log': AttendanceLogSerializer(log).data,
