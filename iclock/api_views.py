@@ -491,6 +491,22 @@ class EmployeeSearchAPIView(APIView):
         return Response({'employees': results})
 
 
+class DeviceFunctionChoicesAPIView(APIView):
+    """
+    GET /api/v1/iclock/device-function-choices/ -- daftar {value, label}
+    dari settings.DEVICEFUNCTION, dipakai isi dropdown Function code
+    (Active Device, Attendance Recap, dst) supaya SELALU sinkron dgn
+    konfigurasi backend -- SEBELUMNYA field ini plain text input di
+    frontend (rawan salah ketik, & admin harus HAPAL kode apa saja yang
+    valid).
+    """
+    permission_classes = [IsAuthenticated, IsStaffRole]
+
+    def get(self, request):
+        choices = [{'value': k, 'label': f'{k} — {v}'} for k, v in settings.DEVICEFUNCTION.items()]
+        return Response({'choices': choices})
+
+
 class AttendanceRecapEmployeeCardAPIView(APIView):
     """
     GET /api/v1/iclock/attendance-recap/<pin>/card/?year=&month=

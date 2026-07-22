@@ -7,6 +7,7 @@ from .api_views import (
     AttendanceRecapEmployeeCardAPIView,
     DepartmentViewSet,
     DeviceCommandViewSet,
+    DeviceFunctionChoicesAPIView,
     DeviceLogViewSet,
     EmployeeSearchAPIView,
     EmployeeViewSet,
@@ -33,4 +34,5 @@ urlpatterns = [
     path('attendance-recap/', AttendanceRecapAPIView.as_view(), name='attendance_recap'),
     path('attendance-recap/<str:pin>/card/', AttendanceRecapEmployeeCardAPIView.as_view(), name='attendance_recap_card'),
     path('employee-search/', EmployeeSearchAPIView.as_view(), name='employee_search'),
+    path('device-function-choices/', DeviceFunctionChoicesAPIView.as_view(), name='device_function_choices'),
 ] + router.urls
