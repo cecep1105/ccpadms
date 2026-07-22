@@ -14,13 +14,18 @@ from channels.auth import AuthMiddlewareStack  # noqa: E402
 from channels.routing import ProtocolTypeRouter, URLRouter  # noqa: E402
 
 import iclock.routing  # noqa: E402
+from iclock.ws_auth import JWTAuthMiddleware  # noqa: E402
 
 application = ProtocolTypeRouter({
     'http': django_asgi_app,
     # AuthMiddlewareStack: populate scope['user'] dari session cookie Django
-    # yang sama dipakai dashboard -- jadi client browser yang belum login
-    # (guest) otomatis ke-anggap AnonymousUser, ditolak di consumer.
+    # (dashboard Django sendiri) -- kalau TIDAK ada session valid,
+    # JWTAuthMiddleware coba lagi via ?token= JWT (frontend Next.js,
+    # cross-origin, tidak punya session cookie). Keduanya additive, tidak
+    # saling mengganggu.
     'websocket': AuthMiddlewareStack(
-        URLRouter(iclock.routing.websocket_urlpatterns)
+        JWTAuthMiddleware(
+            URLRouter(iclock.routing.websocket_urlpatterns)
+        )
     ),
 })
