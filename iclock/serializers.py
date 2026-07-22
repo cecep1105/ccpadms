@@ -52,17 +52,34 @@ class RegisteredDeviceSerializer(serializers.ModelSerializer):
 
 class EmployeeSerializer(serializers.ModelSerializer):
     DeptName = serializers.CharField(source='DeptID.DeptName', read_only=True, default=None)
+    LastPool = serializers.SerializerMethodField()
+    LastDevice = serializers.SerializerMethodField()
 
     class Meta:
         model = employee
         fields = [
             'id', 'PIN', 'EName', 'DeptID', 'DeptName', 'SN', 'Gender', 'Title',
             'Card', 'Privilege', 'Tele', 'Mobile', 'Password',
+            # Aktivitas TERAKHIR (check-in/out/meal) -- diisi
+            # iclock/tasks.py::_refresh_employee_last_seen SETIAP ada transaksi
+            # ATTLOG baru (device fisik ATAU mobile). PENTING: field ini HANYA
+            # terisi utk transaksi yang lewat PIPELINE PUSH SDK BARU -- data
+            # historis dari SEBELUM refactor ini TIDAK di-backfill otomatis,
+            # jadi employee yang belum pernah check-in LAGI sejak fitur ini
+            # ada akan tetap tampil kosong (bukan bug, memang belum ada
+            # transaksi baru utk employee itu).
+            'UTime', 'LastVerify', 'LastPool', 'LastDevice',
         ]
-        read_only_fields = ['id']
+        read_only_fields = ['id', 'UTime', 'LastVerify', 'LastPool', 'LastDevice']
         extra_kwargs = {
             'Password': {'write_only': True, 'required': False, 'allow_blank': True},
         }
+
+    def get_LastPool(self, obj):
+        return obj.LastPool()
+
+    def get_LastDevice(self, obj):
+        return obj.LastDevice()
 
 
 class FingerprintTemplateSerializer(serializers.ModelSerializer):

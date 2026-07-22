@@ -204,8 +204,8 @@ AUTH_LDAP_USER_ATTR_MAP = {
 # ---------------------------------------------------------------------------
 DEVICEFUNCTION = {
     '89': 'KARYAWAN',
-    '1': 'DRIVER-HHHH',
-    '56': 'DRIVER-CCC',
+    '1': 'DRIVER-HIBA',
+    '56': 'DRIVER-HRC',
     'X': 'KANTIN',
     '2': 'DRIVER-AKAP',
     '3': 'YAYASAN',
