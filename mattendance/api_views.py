@@ -13,7 +13,7 @@ from celery.exceptions import TimeoutError as CeleryTimeoutError
 from django.conf import settings
 from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import make_password
-from rest_framework import status, viewsets
+from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
 from rest_framework.response import Response
@@ -361,6 +361,8 @@ class AttendanceLogAdminViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated, IsStaffRole]
     serializer_class = AttendanceLogSerializer
     queryset = AttendanceLog.objects.select_related('user', 'PoolID').all()
+    filter_backends = [filters.OrderingFilter]
+    ordering_fields = '__all__'
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -384,6 +386,8 @@ class FaceProfileAdminViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated, IsStaffRole]
     serializer_class = FaceProfileAdminSerializer
     queryset = FaceProfile.objects.select_related('employee').order_by('-updated_at')
+    filter_backends = [filters.OrderingFilter]
+    ordering_fields = '__all__'
 
     def get_queryset(self):
         qs = super().get_queryset()

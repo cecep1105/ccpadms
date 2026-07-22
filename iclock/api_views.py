@@ -10,7 +10,7 @@ from datetime import date, timedelta
 from django.conf import settings
 from django.db import transaction as db_transaction
 from django.db.models import Q
-from rest_framework import status, viewsets
+from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -58,9 +58,18 @@ from .zk_client import (
 
 
 class BaseIclockViewSet(viewsets.ModelViewSet):
-    """Base viewset: staff-only, dukung pencarian lewat ?q= (field dikonfigurasi per subclass)."""
+    """
+    Base viewset: staff-only, dukung pencarian lewat ?q= (field
+    dikonfigurasi per subclass) DAN sorting lewat ?ordering=field (atau
+    ?ordering=-field utk descending) -- standar DRF OrderingFilter,
+    dipakai frontend Next.js utk header kolom tabel yang bisa diklik.
+    `ordering_fields = '__all__'` sbg default (semua field model boleh
+    dipakai sort) -- override per subclass kalau perlu dibatasi.
+    """
 
     permission_classes = [IsAuthenticated, IsStaffRole]
+    filter_backends = [filters.OrderingFilter]
+    ordering_fields = '__all__'
     search_fields = []  # diisi subclass, mis. ['SN', 'Alias']
 
     def get_queryset(self):

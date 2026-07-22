@@ -128,11 +128,22 @@ class UserViewSet(viewsets.ViewSet):
     """
     permission_classes = [IsAuthenticated, IsStaffRole]
 
+    # Field yang boleh dipakai utk sort (?ordering=field atau ?ordering=-field
+    # utk descending) -- whitelist eksplisit (BUKAN '__all__' spt viewset
+    # lain) krn ViewSet ini custom/manual, tidak lewat DRF OrderingFilter.
+    ORDERING_FIELDS = {'username', 'first_name', 'last_name', 'email', 'is_active', 'is_staff', 'department', 'created_at'}
+
     def list(self, request):
         search = request.query_params.get('q', '')
         page = request.query_params.get('page', 1)
         page_size = int(request.query_params.get('page_size', 20))
         qs = services.list_users(search)
+
+        ordering = request.query_params.get('ordering', '')
+        field = ordering.lstrip('-')
+        if field in self.ORDERING_FIELDS:
+            qs = qs.order_by(ordering)
+
         paginator = Paginator(qs, page_size)
         page_obj = paginator.get_page(page)
         return Response({

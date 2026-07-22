@@ -5,7 +5,7 @@ iclock/api_views.py.
 """
 from django.db import transaction as db_transaction
 from django.db.models import Q
-from rest_framework import status, viewsets
+from rest_framework import filters, status, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -17,9 +17,14 @@ from .serializers import MobilePoolLocSerializer, MobilePoolSerializer, PoolDevi
 
 
 class BaseMclockViewSet(viewsets.ModelViewSet):
-    """Base viewset: staff-only, dukung pencarian lewat ?q= (field dikonfigurasi per subclass)."""
-
+    """
+    Base viewset: staff-only, dukung pencarian lewat ?q= DAN sorting lewat
+    ?ordering=field (atau ?ordering=-field utk descending) -- lihat
+    iclock/api_views.py::BaseIclockViewSet, pola identik.
+    """
     permission_classes = [IsAuthenticated, IsStaffRole]
+    filter_backends = [filters.OrderingFilter]
+    ordering_fields = '__all__'
     search_fields = []
 
     def get_queryset(self):
