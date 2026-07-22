@@ -27,10 +27,20 @@ class ActiveDeviceSerializer(serializers.ModelSerializer):
     class Meta:
         model = iclock
         fields = [
-            'SN', 'Alias', 'DeptID', 'DeptName', 'IPAddress', 'MAC', 'TZAdj',
-            'State', 'LastActivity',
+            'SN', 'Alias', 'DeptID', 'DeptName', 'Function', 'IPAddress', 'MAC', 'TZAdj',
+            'State', 'LastActivity', 'PushVersion',
+            # Konfigurasi PUSH SDK per-device (test/myrule.md Rule 2) --
+            # disamakan dgn ActiveDeviceForm supaya API & dashboard konsisten.
+            # PENTING: field2 ini (termasuk Realtime) SEBELUMNYA pernah hilang
+            # dari sini -- akibatnya field itu MISSING TOTAL dari respons API
+            # (bukan cuma salah nilai), dan React/JS menganggap `undefined`
+            # sbg falsy, jadi kolom Realtime di Next.js SELALU tampil "Tidak"
+            # apapun nilai sebenarnya di database. Kalau field ini hilang
+            # LAGI di masa depan, itu gejalanya: cek dulu di sini.
+            'LogStamp', 'OpLogStamp', 'PhotoStamp', 'TransTimes', 'TransInterval',
+            'UpdateDB', 'ErrorDelay', 'Delay', 'Realtime', 'Encrypt',
         ]
-        read_only_fields = ['State', 'LastActivity']
+        read_only_fields = ['State', 'LastActivity', 'PushVersion']
 
     def validate_SN(self, value):
         if self.instance is not None and self.instance.pk != value:
