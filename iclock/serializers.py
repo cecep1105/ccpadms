@@ -23,12 +23,13 @@ class DepartmentSerializer(serializers.ModelSerializer):
 
 class ActiveDeviceSerializer(serializers.ModelSerializer):
     DeptName = serializers.CharField(source='DeptID.DeptName', read_only=True, default=None)
+    LastData = serializers.SerializerMethodField()
 
     class Meta:
         model = iclock
         fields = [
             'SN', 'Alias', 'DeptID', 'DeptName', 'Function', 'IPAddress', 'MAC', 'TZAdj',
-            'State', 'LastActivity', 'PushVersion',
+            'State', 'LastActivity', 'LastData', 'PushVersion',
             # Konfigurasi PUSH SDK per-device (test/myrule.md Rule 2) --
             # disamakan dgn ActiveDeviceForm supaya API & dashboard konsisten.
             # PENTING: field2 ini (termasuk Realtime) SEBELUMNYA pernah hilang
@@ -40,7 +41,15 @@ class ActiveDeviceSerializer(serializers.ModelSerializer):
             'LogStamp', 'OpLogStamp', 'PhotoStamp', 'TransTimes', 'TransInterval',
             'UpdateDB', 'ErrorDelay', 'Delay', 'Realtime', 'Encrypt',
         ]
-        read_only_fields = ['State', 'LastActivity', 'PushVersion']
+        read_only_fields = ['State', 'LastActivity', 'LastData', 'PushVersion']
+
+    def get_LastData(self, obj):
+        # LastData() query terpisah ke tabel transaction per device (lihat
+        # iclock/models.py::iclock.LastData) -- BEDA dari LastActivity
+        # (waktu request/heartbeat terakhir): ini waktu TRANSAKSI absensi
+        # terakhir, mencerminkan device benar2 masih kirim data, bukan
+        # cuma "hidup"/nge-ping ke server.
+        return obj.LastData()
 
     def validate_SN(self, value):
         if self.instance is not None and self.instance.pk != value:
