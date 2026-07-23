@@ -85,6 +85,7 @@ INSTALLED_APPS = [
     'iclock',
     'mclock',
     'mattendance',
+    'netmon'
 ]
 
 MIDDLEWARE = [
