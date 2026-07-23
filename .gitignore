@@ -16,3 +16,7 @@ masterlogother/
 .vscode/
 .idea/
 .DS_Store
+
+*.rdb
+*.-code-workspace
+
