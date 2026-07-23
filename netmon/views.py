@@ -14,6 +14,9 @@ class MIKROTIKConnectionError(Exception):
     """Gagal terhubung ke MIKROTIK."""
 
 class RouterOSCommandView(APIView):
+    permission_classes = [IsAuthenticated, IsStaffRole]
+
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         # Router connection configurations
@@ -55,10 +58,16 @@ class RouterOSCommandView(APIView):
             self.connection.disconnect()
         return super().finalize_response(request, response, *args, **kwargs)
 
-    permission_classes = [IsAuthenticated, IsStaffRole]
     def get(self, request, host=None, command=None, format=None):
         """Execute dynamically supplied RouterOS command."""
         import re
+
+
+        page = int(request.query_params.get('page', 1))
+        limit = int(request.query_params.get('limit', 10))
+        sort_by = request.query_params.get('sort_by', 'id')
+        order = request.query_params.get('order', 'asc')
+
 
         if not command:
             return Response({"error": "Command is required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -72,11 +81,28 @@ class RouterOSCommandView(APIView):
             fcmd = pattern.sub(lambda match: mapping[match.group(0)], command)
             formatted_cmd = '/' + fcmd
             result = self.api.get_resource(formatted_cmd).get(**request.GET.dict())
-            return Response({"command": formatted_cmd, "result": result}, status=status.HTTP_200_OK)
+
+            # 4. Sort Python list (handling strings)
+            reverse = True if order == 'desc' else False
+            result.sort(key=lambda x: x.get(sort_by, ''), reverse=reverse)
+
+            # 5. Paginate
+            start = (page - 1) * limit
+            end = start + limit
+            paginated_data = result[start:end]
+            return Response({
+                "command": formatted_cmd,
+                "count": len(result),
+                "results": paginated_data,
+                "next": page + 1 if end < len(result) else None,
+                "previous": page - 1 if page > 1 else None,
+
+            }, status=status.HTTP_200_OK)
+
+
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    permission_classes = [IsAuthenticated, IsStaffRole]
     def post(self,request,host=None,command=None,format=None):
         """Execute dynamically supplied RouterOS command."""
         import re
@@ -94,7 +120,7 @@ class RouterOSCommandView(APIView):
 
             result = self.api.get_resource(formatted_cmd).call(postcmd, request.data)
 
-            return Response({"command": formatted_cmd, "result": result}, status=status.HTTP_200_OK)
+            return Response({"command": formatted_cmd, "results": result}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
