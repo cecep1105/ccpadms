@@ -18,5 +18,5 @@ masterlogother/
 .DS_Store
 
 *.rdb
-*.-code-workspace
+*.code-workspace
 
