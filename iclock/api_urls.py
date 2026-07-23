@@ -13,6 +13,7 @@ from .api_views import (
     EmployeeViewSet,
     FingerprintTemplateViewSet,
     OperationLogViewSet,
+    PoolDeviceChoicesAPIView,
     RegisteredDeviceViewSet,
     TransactionViewSet,
 )
@@ -35,4 +36,5 @@ urlpatterns = [
     path('attendance-recap/<str:pin>/card/', AttendanceRecapEmployeeCardAPIView.as_view(), name='attendance_recap_card'),
     path('employee-search/', EmployeeSearchAPIView.as_view(), name='employee_search'),
     path('device-function-choices/', DeviceFunctionChoicesAPIView.as_view(), name='device_function_choices'),
+    path('pool-device-choices/', PoolDeviceChoicesAPIView.as_view(), name='pool_device_choices'),
 ] + router.urls

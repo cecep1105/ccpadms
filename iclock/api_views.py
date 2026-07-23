@@ -16,7 +16,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from api.permissions import IsStaffRole
+from api.permissions import HasFeaturePermission, IsStaffRole
 
 from .models import RegisteredDevice, department, devcmds, devlog, employee, fptemp, iclock, oplog, transaction
 from .serializers import (
@@ -315,7 +315,7 @@ class EmployeeViewSet(BaseIclockViewSet):
             'device_error': device_error,
         })
 
-    @action(detail=True, methods=['post'], url_path='transfer-finger')
+    @action(detail=True, methods=['post'], url_path='transfer-finger', permission_classes=[HasFeaturePermission('iclock.can_transfer_finger')])
     def transfer_finger(self, request, pk=None):
         """
         POST .../transfer-finger/ body: {to_pool, target_device?}
@@ -411,7 +411,7 @@ class AttendanceRecapAPIView(APIView):
     Sama persis logic-nya dgn iclock/views.py::attendance_recap -- matrix
     PIN x tanggal berisi jam IN (paling awal)/OUT (paling akhir) per hari.
     """
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_attendance_recap')]
 
     def get(self, request):
         serializer = AttendanceRecapQuerySerializer(data=request.query_params)
@@ -488,15 +488,20 @@ class AttendanceRecapAPIView(APIView):
 
 
 class EmployeeSearchAPIView(APIView):
-    """GET /api/v1/iclock/employee-search/?q= -- autocomplete PIN/nama, dipakai Attendance Recap."""
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    """
+    GET /api/v1/iclock/employee-search/?q= -- autocomplete PIN/nama, dipakai
+    Attendance Recap (staff) DAN halaman Transfer Finger non-staff (perlu
+    'id' -- BUKAN cuma PIN -- krn endpoint transfer-finger dipanggil pakai
+    PK numerik, bukan PIN).
+    """
+    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_transfer_finger', 'iclock.can_view_attendance_recap')]
 
     def get(self, request):
         q = request.query_params.get('q', '').strip()
         results = []
         if len(q) >= 2:
             qs = employee.objects.filter(Q(PIN__icontains=q) | Q(EName__icontains=q)).order_by('PIN')[:15]
-            results = [{'pin': e.PIN, 'name': e.EName or ''} for e in qs]
+            results = [{'id': e.id, 'pin': e.PIN, 'name': e.EName or ''} for e in qs]
         return Response({'employees': results})
 
 
@@ -516,6 +521,32 @@ class DeviceFunctionChoicesAPIView(APIView):
         return Response({'choices': choices})
 
 
+class PoolDeviceChoicesAPIView(APIView):
+    """
+    GET /api/v1/iclock/pool-device-choices/?pool_id= -- versi RINGAN &
+    READ-ONLY dari Department/ActiveDevice, KHUSUS isi dropdown Pool &
+    Device di form Transfer Finger non-staff (padanan
+    iclock/views.py::ajax_devices_by_pool dashboard Django). SENGAJA
+    endpoint TERPISAH dari DepartmentViewSet/ActiveDeviceViewSet biasa
+    (yang staff-only & expose SEMUA field termasuk IP/MAC/konfigurasi
+    PUSH SDK) -- user non-staff yang cuma dikasih izin
+    'can_transfer_finger' TIDAK PERLU & TIDAK SEHARUSNYA lihat detail
+    device selengkap itu, cukup {id, name} sekadar buat pilihan dropdown.
+    """
+    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_transfer_finger')]
+
+    def get(self, request):
+        pools = list(department.objects.order_by('DeptName').values('DeptID', 'DeptName'))
+        data = {'pools': [{'id': p['DeptID'], 'name': p['DeptName']} for p in pools]}
+
+        pool_id = request.query_params.get('pool_id')
+        if pool_id:
+            devices = list(iclock.objects.filter(DeptID_id=pool_id).order_by('Alias').values('SN', 'Alias'))
+            data['devices'] = [{'sn': d['SN'], 'name': d['Alias']} for d in devices]
+
+        return Response(data)
+
+
 class AttendanceRecapEmployeeCardAPIView(APIView):
     """
     GET /api/v1/iclock/attendance-recap/<pin>/card/?year=&month=
@@ -523,7 +554,7 @@ class AttendanceRecapEmployeeCardAPIView(APIView):
     transaksi lengkap (bukan cuma ringkasan in-pertama/out-terakhir spt
     matrix utama).
     """
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_attendance_recap')]
 
     def get(self, request, pin):
         from calendar import monthrange
