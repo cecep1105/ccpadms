@@ -50,3 +50,7 @@ redis>=5.0  # client Python utk Celery bicara ke Redis broker
 # tulis text file harian (masterattlog/dst) yang bisa ditulis BERSAMAAN
 # oleh banyak device sekaligus. Lihat iclock/pushsdk_writer.py & test/myrule.md.
 portalocker>=2.8
+
+
+#Untuk network monitoring via mikrotik
+RouterOS-api>=0.21.0

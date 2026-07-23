@@ -7,6 +7,7 @@ urlpatterns = [
     path('api/v1/iclock/', include('iclock.api_urls')),
     path('api/v1/mattendance/', include('mattendance.api_urls')),
     path('api/v1/mclock/', include('mclock.api_urls')),
+    path('api/v1/netmon/', include('netmon.api_urls')),    
     # PENTING: path INI ('/iclock/cdata', '/iclock/getrequest', '/iclock/devicecmd')
     # HARDCODED di firmware device fisik (protokol PUSH SDK, lihat resume di
     # test/pushsdk_protocol_resume.md) -- TIDAK BOLEH diubah/dipindah, BEDA

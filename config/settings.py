@@ -442,3 +442,8 @@ LOGGING = {
         'mclock': {'handlers': ['console'], 'level': 'DEBUG' if DEBUG else 'INFO', 'propagate': False},
     },
 }
+
+
+#NETMON configuration
+MIKROTIK_ENCRYPTION_KEY = env('MIKROTIK_ENCRYPTION_KEY', default='')
+MIKROTIK_PASSWORD_ENCRYPTED=env('MIKROTIK_PASSWORD_ENCRYPTED', default='')
