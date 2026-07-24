@@ -62,11 +62,21 @@ class RouterOSCommandView(APIView):
         """Execute dynamically supplied RouterOS command."""
         import re
 
+        # 1. Make a mutable copy of request.GET
+        params = request.GET.copy()
 
-        page = int(request.query_params.get('page', 1))
-        limit = int(request.query_params.get('limit', 10))
-        sort_by = request.query_params.get('sort_by', 'id')
-        order = request.query_params.get('order', 'asc')
+        # 2. Define your regex pattern for keys to remove
+        pattern = re.compile(r"^_page|^_limit|^_order|^_sortby")
+
+        # 3. Find and delete keys matching the regex
+        for key in list(params.keys()):
+            if pattern.match(key):
+                del params[key]
+
+        page = int(request.query_params.get('_page', 1))
+        limit = int(request.query_params.get('_limit', 10))
+        sort_by = request.query_params.get('_sort_by', 'id')
+        order = request.query_params.get('_order', 'asc')
 
 
         if not command:
@@ -80,7 +90,7 @@ class RouterOSCommandView(APIView):
             pattern = re.compile("|".join(re.escape(key) for key in mapping.keys()))
             fcmd = pattern.sub(lambda match: mapping[match.group(0)], command)
             formatted_cmd = '/' + fcmd
-            result = self.api.get_resource(formatted_cmd).get(**request.GET.dict())
+            result = self.api.get_resource(formatted_cmd).get(**params.dict())
 
             # 4. Sort Python list (handling strings)
             reverse = True if order == 'desc' else False
