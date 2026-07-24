@@ -20,3 +20,9 @@ masterlogother/
 *.rdb
 *.code-workspace
 
+# Sertifikat SSL/TLS -- JANGAN di-commit (self-signed pun sebaiknya
+# di-generate lokal masing2, apalagi kalau nanti pakai cert ASLI --
+# private key TIDAK BOLEH ke-publish ke repo manapun).
+docker/nginx/certs/*.pem
+docker/nginx/certs/*.key
+docker/nginx/certs/*.crt
