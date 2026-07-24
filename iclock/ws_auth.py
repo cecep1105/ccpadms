@@ -23,6 +23,10 @@ from urllib.parse import parse_qs
 from channels.db import database_sync_to_async
 from django.contrib.auth.models import AnonymousUser
 
+import logging
+
+logger = logging.getLogger('iclock')
+
 
 @database_sync_to_async
 def _get_user_from_jwt(token_str):
@@ -34,8 +38,22 @@ def _get_user_from_jwt(token_str):
     try:
         validated_token = AccessToken(token_str)
         user_id = validated_token['user_id']
-        return User.objects.get(pk=user_id, is_active=True)
-    except (TokenError, KeyError, User.DoesNotExist):
+        user = User.objects.get(pk=user_id, is_active=True)
+        logger.info("WS JWTAuthMiddleware: token valid, user='%s' (id=%s)", user.username, user_id)
+        return user
+    except TokenError as exc:
+        # PALING SERING: token EXPIRED (access token cuma hidup 30 menit
+        # default -- lihat JWT_ACCESS_TOKEN_LIFETIME_MINUTES) atau
+        # signature tidak cocok (SECRET_KEY beda antara saat token
+        # di-generate vs saat divalidasi -- WAJIB SAMA persis, cek env
+        # SECRET_KEY kalau baru ganti/rebuild container).
+        logger.warning("WS JWTAuthMiddleware: token TIDAK VALID (%s): %s", type(exc).__name__, exc)
+        return AnonymousUser()
+    except KeyError:
+        logger.warning("WS JWTAuthMiddleware: token valid tapi tidak ada klaim 'user_id' di dalamnya.")
+        return AnonymousUser()
+    except User.DoesNotExist:
+        logger.warning("WS JWTAuthMiddleware: user_id=%s dari token tidak ditemukan/tidak aktif di database.", user_id)
         return AnonymousUser()
 
 
@@ -50,4 +68,18 @@ class JWTAuthMiddleware:
             token = parse_qs(query_string).get('token', [None])[0]
             if token:
                 scope['user'] = await _get_user_from_jwt(token)
+            else:
+                # PENTING: kalau baris ini yang muncul di log, artinya
+                # request WEBSOCKET-nya SAMPAI ke Django (middleware ini
+                # jalan), TAPI TIDAK ADA ?token= sama sekali di URL koneksi
+                # -- kemungkinan besar penyebabnya di SISI FRONTEND
+                # (Next.js): NEXT_PUBLIC_WS_BASE_URL salah/kosong, session
+                # NextAuth belum siap (accessToken undefined) saat mencoba
+                # konek, atau useIclockWsMessage/IclockWsProvider tidak
+                # ke-mount di halaman itu.
+                logger.warning(
+                    "WS JWTAuthMiddleware: TIDAK ADA token JWT di query string (?token=) & TIDAK ADA "
+                    "session cookie -- request ini akan DITOLAK sbg AnonymousUser. Cek sisi Next.js: "
+                    "NEXT_PUBLIC_WS_BASE_URL & session.accessToken."
+                )
         return await self.inner(scope, receive, send)
