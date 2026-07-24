@@ -97,7 +97,23 @@ services:
       # dijalankan SEBELUM `exec "$@"`), jadi healthy di sini JUGA berarti
       # migrasi sudah kelar -- dipakai django-celery & nginx di bawah utk
       # nunggu bener2 siap, bukan cuma "container sudah nyala".
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/admin/login/')"]
+      #
+      # PENTING: pakai try/except HTTPError -- urllib.request.urlopen()
+      # SECARA DEFAULT anggap status non-2xx/3xx (mis. 404) sbg EXCEPTION
+      # (HTTPError), padahal utk kebutuhan healthcheck ini, dapat response
+      # HTTP APAPUN (walau 404) SUDAH CUKUP membuktikan daphne benar2
+      # listen & memproses request -- yang HARUS dianggap gagal cuma kalau
+      # KONEKSINYA sendiri gagal total (server belum listen sama sekali).
+      test:
+        - "CMD"
+        - "python"
+        - "-c"
+        - |
+          import urllib.request, urllib.error
+          try:
+              urllib.request.urlopen('http://localhost:8000/admin/login/', timeout=3)
+          except urllib.error.HTTPError:
+              pass  # dapat response HTTP (walau 4xx/5xx) = server SUDAH hidup, ini yg mau dibuktikan
       interval: 10s
       timeout: 5s
       retries: 12
