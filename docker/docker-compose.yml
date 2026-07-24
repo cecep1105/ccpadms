@@ -155,19 +155,29 @@ services:
       context: ../../nextadms
       dockerfile: docker/nextjs/Dockerfile
       args:
-        # Build-time (di-inline ke bundle client, lihat catatan panjang
-        # di docker/nextjs/Dockerfile) -- HARUS cocok dgn skema routing
-        # nginx di bawah (same-origin lewat port 80, BUKAN port 8000
-        # langsung, supaya browser tidak kena masalah cross-origin sama
-        # sekali -- lihat docker/nginx/nginx.conf).
-        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost/api/v1}
-        NEXT_PUBLIC_WS_BASE_URL: ${NEXT_PUBLIC_WS_BASE_URL:-ws://localhost}
+        # NEXT_PUBLIC_API_BASE_URL & NEXT_PUBLIC_WS_BASE_URL SENGAJA TIDAK
+        # di-set di sini lagi -- kode frontend SEKARANG default pakai path
+        # RELATIF (HTTP) & origin browser SAAT ITU (WebSocket), otomatis
+        # ikut IP/domain APA PUN yang dipakai user buka halamannya (lewat
+        # nginx yang menyatukan Next.js & API Django jadi 1 origin) --
+        # TIDAK PERLU rebuild lagi tiap ganti cara akses (localhost, IP
+        # LAN, domain lain, dst). Cukup isi kalau MEMANG butuh API di
+        # origin BERBEDA (skenario Next.js & Django TIDAK disatukan nginx).
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-}
+        NEXT_PUBLIC_WS_BASE_URL: ${NEXT_PUBLIC_WS_BASE_URL:-}
         NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-}
     restart: unless-stopped
     environment:
       NEXTAUTH_SECRET: "${NEXTAUTH_SECRET:?wajib diisi di .env, generate pakai: openssl rand -base64 32}"
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost}
-      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost/api/v1}
+      # BEDA dari NEXT_PUBLIC_API_BASE_URL (itu utk BROWSER) -- ini KHUSUS
+      # fetch dari SERVER Next.js sendiri (Server Component, NextAuth
+      # authorize/refresh) ke Django, lewat JARINGAN INTERNAL Docker
+      # Compose (nama service `django-web`), TIDAK lewat nginx/IP publik
+      # sama sekali -- lebih cepat & TIDAK PERLU rebuild kalau ganti IP
+      # akses publik (env var biasa spt ini dibaca saat RUNTIME, beda dari
+      # NEXT_PUBLIC_* yang di-bake saat build).
+      DJANGO_INTERNAL_URL: http://django-web:8000/api/v1
     depends_on:
       - django-web
 
