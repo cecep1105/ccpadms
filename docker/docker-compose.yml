@@ -31,7 +31,7 @@ services:
       # DBeaver/MySQL Workbench dari host) SELAMA testing -- boleh dihapus
       # kalau tidak perlu, service lain akses lewat network internal
       # compose (nama service `mysql`), tidak butuh port ini terbuka.
-      - "3306:3306"
+      - "3307:3306"
 
   # --- Django: 1 IMAGE, 2 service (web/websocket & celery worker) ---
   # Kode app di-BIND MOUNT (baris `volumes: - ..:/app` di bawah), BUKAN
