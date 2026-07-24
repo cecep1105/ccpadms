@@ -107,7 +107,7 @@ services:
       # SELAMA testing (mis. `python manage.py shell` dari host via port
       # ini, atau buka http://localhost:8000 langsung tanpa lewat nginx).
       # Traffic browser NORMAL tetap lewat nginx (port 80), TIDAK lewat sini.
-      - "8000:8000"
+      - "8100:8000"
 
   django-celery:
     build:
@@ -159,7 +159,7 @@ services:
     image: nginx:1.27-alpine
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "8036:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - django_static:/app/staticfiles:ro
