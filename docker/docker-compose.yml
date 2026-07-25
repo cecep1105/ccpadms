@@ -84,6 +84,12 @@ services:
         MCLOCK_MSSQL_TDS_VERSION: ${MCLOCK_MSSQL_TDS_VERSION:-7.0}
         ICLOCK_LEGACY_DBCRED: ${ICLOCK_LEGACY_DBCRED:-}        
       RUN_MIGRATIONS: "true"  # HANYA service ini yang migrate/collectstatic, lihat entrypoint.sh
+
+    extra_hosts:
+      # If using Option A (Entire mapping string):
+      - "${SQLDBHOST_1}"
+      - "${SQLDBHOST_2}" 
+      - "${SQLDBHOST_3}"       
     volumes:
       - ..:/app
       - django_static:/app/staticfiles
