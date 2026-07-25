@@ -1,15 +1,24 @@
-# Django 5 Fullstack Backend — LDAP + Local Auth, MySQL, Dashboard Custom, API untuk Nuxt
+# CCPADMS Backend — Django 5, LDAP + Local Auth, MySQL, Dashboard Custom + REST API
 
-Scaffold awal backend Django 5 dengan:
+> ⚠️ Judul & sebagian istilah di dokumen ini historisnya menyebut "Nuxt"
+> sbg frontend rencana awal — **rencana itu berubah**, frontend yang
+> BENERAN dibangun & dipakai adalah **Next.js** (repo terpisah `nextadms`).
+> Istilah "Nuxt" yang masih muncul di bawah ini murni sisa historis,
+> ABAIKAN — baca bagian **30** untuk ringkasan frontend Next.js & Docker
+> Compose (paling relevan & terkini).
+
+Backend Django 5 dengan:
 
 - **Autentikasi ganda**: LDAP diprioritaskan, fallback ke akun lokal.
 - **Database MySQL** (via PyMySQL, gampang setup, bisa ganti ke `mysqlclient`).
-- **Dashboard custom** (bukan Django admin bawaan) — beda tampilan untuk admin vs user biasa.
-- **REST API + JWT** siap dikonsumsi frontend **Nuxt**, semua logic dari service layer yang sama dengan dashboard.
+- **Dashboard custom** (bukan Django admin bawaan, server-rendered, masih jalan) — beda tampilan untuk admin vs user biasa.
+- **REST API + JWT** dikonsumsi frontend **Next.js** (`nextadms`, repo terpisah) DAN dashboard server-rendered di atas, semua logic dari service layer yang sama.
+- **PUSH SDK** (protokol device fingerprint fisik), **Mobile Attendance** (check-in/out/meal via HP karyawan, face recognition + GPS), **WebSocket real-time** (Channels+Redis), **Docker Compose** siap testing mirip-production (lihat bagian 30).
 
 ---
 
 ## 1. Struktur Project
+
 
 ```
 config/         # settings, root urls, wsgi/asgi
@@ -2595,3 +2604,176 @@ kebaca sebagai pesan, bukan baris data.
 - [ ] Jalankan `python manage.py makemigrations iclock && python manage.py migrate` setelah update
       izin fitur granular (bagian 27g) — permission `can_transfer_finger`/`can_view_attendance_recap`
       baru benar-benar ada di database setelah migrate ini.
+
+## 30. Frontend Next.js Terpisah (`nextadms`) + Docker Compose Test-Production
+
+Sesi-sesi terbaru fokus di **2 hal besar** di luar `dashboard/` (server-rendered
+lama, masih ada & masih jalan): (a) frontend **Next.js terpisah** yang
+mengonsumsi API `/api/v1/...` yang sama, dan (b) **Docker Compose** untuk
+testing mirip-production (Redis + MySQL + Django + Next.js + nginx dgn SSL).
+Dokumentasi lengkap frontend Next.js ada di README repo `nextadms` sendiri —
+bagian ini fokus ke perubahan/tambahan di sisi **Django** yang dibutuhkan
+supaya frontend itu bisa jalan, plus catatan arsitektur Docker.
+
+### 30.1. Kenapa ada 2 frontend sekaligus
+
+`dashboard/` (Django template, server-rendered) **tetap ada & tetap jalan** —
+TIDAK dihapus/digantikan. `nextadms` adalah **percobaan/migrasi bertahap** ke
+frontend terpisah (Next.js), mengonsumsi API yang SAMA (`/api/v1/...`). Kedua
+frontend BISA jalan bersamaan (beda subdomain/path), berbagi backend & database
+yang sama sepenuhnya.
+
+### 30.2. Sistem Permission Granular utk API (`HasFeaturePermission`)
+
+Dashboard lama sudah punya `accounts.permissions.permission_or_staff_required`
+(izinkan staff ATAU user non-staff yang dikasih permission Django spesifik,
+lihat bagian 27g). Untuk API (dikonsumsi Next.js), padanannya:
+
+```python
+# api/permissions.py
+def HasFeaturePermission(*perm_codenames):
+    """Factory kelas permission DRF -- izinkan staff/superuser SEPERTI BIASA,
+    ATAU user non-staff yg py user.has_perm() True utk salah satu codename."""
+```
+
+Dipakai di:
+- `iclock/api_views.py::EmployeeViewSet.transfer_finger` — `HasFeaturePermission('iclock.can_transfer_finger')`
+- `iclock/api_views.py::AttendanceRecapAPIView`, `AttendanceRecapEmployeeCardAPIView` — `HasFeaturePermission('iclock.can_view_attendance_recap')`
+- `iclock/api_views.py::EmployeeSearchAPIView` — kedua permission (dipakai autocomplete di 2 fitur)
+
+**PENTING**: permission ini HANYA membuka action/endpoint SPESIFIK yang
+di-decorate, BUKAN seluruh ViewSet. User dgn `can_transfer_finger` TETAP
+403 kalau akses `GET /api/v1/iclock/device-user/` (list Employee biasa) —
+diuji & dikonfirmasi eksplisit, bukan asumsi.
+
+Endpoint baru pendukung ini: `PoolDeviceChoicesAPIView`
+(`/api/v1/iclock/pool-device-choices/?pool_id=`) — versi RINGAN
+Department/ActiveDevice (cuma `{id, name}`), khusus dropdown Pool/Device di
+form Transfer Finger non-staff, supaya user terbatas TIDAK perlu diberi akses
+ke data device lengkap (IP/MAC/dst) lewat endpoint staff-only biasa.
+
+`EmployeeSearchAPIView` diperluas: sekarang return `id` juga (bukan cuma
+`pin`/`name`) — dibutuhkan Next.js utk memanggil `transfer-finger` (butuh PK
+numerik, bukan PIN).
+
+`api/serializers.py::UserSerializer` (endpoint `/me/`) sekarang expose
+`can_transfer_finger`/`can_view_attendance_recap` (computed via `has_perm()`)
+— dipakai frontend Next.js utk tahu kartu/menu mana yang perlu ditampilkan.
+
+### 30.3. WebSocket: Autentikasi JWT utk Frontend Cross-Origin
+
+Consumer WebSocket (`iclock/consumers.py`, bagian 26) awalnya CUMA
+autentikasi lewat session cookie (`AuthMiddlewareStack`) — cukup utk
+dashboard Django sendiri, TAPI TIDAK BISA dipakai Next.js (autentikasi JWT
+Bearer token, TIDAK PUNYA session cookie Django, apalagi kalau cross-origin).
+
+**Solusi**: `iclock/ws_auth.py::JWTAuthMiddleware` — middleware Channels
+TAMBAHAN (bukan pengganti), jalan SETELAH `AuthMiddlewareStack`: kalau session
+tidak ada/tidak valid, coba lagi autentikasi lewat `?token=<JWT access token>`
+di query string koneksi WebSocket (satu-satunya cara kirim data tambahan saat
+WebSocket browser connect, tidak bisa lewat header `Authorization` biasa
+spt `fetch()`).
+
+```python
+# config/asgi.py
+'websocket': AuthMiddlewareStack(
+    JWTAuthMiddleware(
+        URLRouter(iclock.routing.websocket_urlpatterns)
+    )
+),
+```
+
+Diuji 5 skenario (`channels.testing.WebsocketCommunicator`): tanpa token
+ditolak, JWT valid diterima, broadcast `wsinfo()` benar-benar sampai ke client
+JWT, JWT tidak valid ditolak, user `is_active=False` ditolak.
+
+Consumer (`iclock/consumers.py`) & middleware (`iclock/ws_auth.py`) sekarang
+JUGA logging LENGKAP (connect sukses, connect DITOLAK, disconnect, alasan
+token invalid) — sebelumnya CUMA logging kalau sukses, bikin susah diagnosis
+kalau koneksi gagal diam-diam (kasus nyata: field `CHANNEL_LAYERS` sempat
+hardcode `redis://127.0.0.1:6379/0`, ketahuan cuma pas dites di Docker
+multi-container — Redis di container terpisah, dijangkau lewat nama service
+`redis`, BUKAN `127.0.0.1`. Sudah diperbaiki ikut `REDIS_HOST`/`REDIS_PORT`
+spt `CELERY_BROKER_URL`.)
+
+### 30.4. Docker Compose — Test Mirip-Production
+
+Setup lengkap ada di folder `docker/` (docker-compose.yml, Dockerfile,
+nginx.conf, dst) — **baca `docker/README.md` utk instruksi pemakaian
+lengkap**. Ringkasan arsitektur:
+
+```
+Browser -> nginx (443 HTTPS, redirect dari 80) -> Django (daphne, HTTP+WS
+           sekaligus) & Next.js, disatukan 1 origin
+                              |
+                 MySQL, Redis (shared: Channels layer, Celery broker/backend, cache)
+```
+
+**1 image Django, 2 service** (`django-web` daphne ASGI, `django-celery`
+worker) — command beda, image SAMA. Kode di-**bind mount**
+(`volumes: - ..:/app`), BUKAN di-`COPY` ke image — tetap bisa edit kode
+Python spt biasa (mode development), image cuma perlu rebuild kalau
+`requirements.txt` berubah.
+
+**Jebakan-jebakan nyata yang ditemukan & diperbaiki** (dicatat supaya tidak
+terulang):
+1. **`healthcheck` django-web** — `urllib.request.urlopen()` anggap status
+   non-2xx (mis. 404 dari `/admin/login/`) sbg EXCEPTION, bikin healthcheck
+   salah anggap container "unhealthy" padahal daphne sudah hidup & benar
+   merespons. Fix: tangkap `HTTPError` eksplisit, anggap respons HTTP APAPUN
+   (termasuk 404) sbg bukti server hidup.
+2. **nginx routing `/api/*` kebablasan** — regex awal `^/(api|admin)/`
+   nangkap SEMUA `/api/*`, termasuk `/api/auth/*` milik NextAuth (Next.js)
+   sendiri, ikut diteruskan ke Django (yg tidak punya rute itu) -> 404,
+   NextAuth gagal total. Fix: regex spesifik `^/(api/v1|admin)/`.
+3. **nginx routing `/iclock/*` tabrakan nama** — Django (device firmware,
+   3 endpoint fixed: `/iclock/cdata`, `/getrequest`, `/devicecmd`) & Next.js
+   (halaman dashboard `/iclock/active-devices` dst) SAMA-SAMA pakai prefix
+   `/iclock/` (kebetulan app Django-nya juga bernama "iclock"). Fix: EXACT
+   match (`location =`) ke 3 path PERSIS milik Django, bukan prefix match.
+4. **`ALLOWED_HOSTS` utk fetch server-to-server** — Next.js SERVER (Server
+   Component, NextAuth authorize/refresh) fetch ke Django LANGSUNG lewat
+   jaringan internal Docker (`http://django-web:8000/...`, BUKAN lewat
+   nginx) — Host header request itu jadi `django-web:8000`, WAJIB ada di
+   `ALLOWED_HOSTS` atau Django tolak `DisallowedHost`.
+5. **`$host` nginx MEMBUANG PORT** — dipakai di 2 tempat beda & keduanya
+   kena: (a) redirect HTTP->HTTPS (`https://$host$request_uri` jadi
+   `https://domain/` TANPA port, browser pakai port default 443, bukan port
+   host sungguhan mis. 8443) — fix: sertakan port eksplisit
+   (`https://$host:8443$request_uri`, GANTI ANGKA kalau port host beda).
+   (b) `proxy_set_header Host $host;` (SEMUA 6 lokasi) — backend (Django &
+   Next.js) terima Host TANPA port, bikin redirect/URL absolut yang mereka
+   bangun (mis. middleware Next.js) salah port juga — fix: ganti `$host`
+   jadi `$http_host` (TIDAK membuang apa pun, teruskan persis apa yg browser
+   kirim) di SEMUA `proxy_set_header Host`.
+
+Semua 5 poin di atas diuji LANGSUNG (nginx sungguhan + backend tiruan,
+`WebsocketCommunicator`, dst), bukan cuma baca kode — detail lengkap ada di
+riwayat percakapan sesi terkait kalau perlu ditelusuri ulang.
+
+### 30.5. HTTPS/SSL
+
+Terminasi SSL langsung di nginx compose ini (bukan nginx tambahan di
+depannya) — cukup utk setup single-app spt ini. Sertifikat asli (Sectigo)
+ATAU self-signed (`docker/nginx/certs/generate-self-signed.sh`, utk testing
+lokal/LAN) — taruh di `docker/nginx/certs/{fullchain,privkey}.pem`.
+`SESSION_COOKIE_SECURE`/`CSRF_COOKIE_SECURE` WAJIB `True` kalau pakai HTTPS
+(nginx.conf versi ini SELALU redirect HTTP->HTTPS).
+
+### 30.6. Checklist Tambahan Sebelum Production Sungguhan (Docker)
+
+- [ ] `ALLOWED_HOSTS` WAJIB memuat `django-web` (nama service internal
+      Docker) + SEMUA domain/IP publik yang dipakai akses.
+- [ ] Kalau ganti port host HTTPS dari default `8443`, update juga angka
+      `8443` yang di-hardcode di `docker/nginx/nginx.conf` (redirect
+      HTTP->HTTPS) — dikomentari jelas lokasinya.
+- [ ] `docker compose up -d --force-recreate <service>` kalau ganti env var
+      di `.env` — `restart` SAJA TIDAK CUKUP (env var lama masih kepakai,
+      cuma proses di-restart, container-nya tidak dibuat ulang).
+- [ ] Redirect 301 (HTTP->HTTPS) DIINGAT AGRESIF oleh browser — kalau habis
+      ganti config redirect & masih kelihatan salah, coba tab
+      Incognito/Private dulu sebelum curiga config-nya salah.
+- [ ] `NEXT_PUBLIC_API_BASE_URL`/`NEXT_PUBLIC_WS_BASE_URL` di `.env` boleh
+      DIKOSONGKAN (default: path relatif/origin browser dinamis, lihat
+      README `nextadms`) — cuma isi kalau API benar-benar di origin BEDA
+      dari halaman Next.js-nya sendiri.
