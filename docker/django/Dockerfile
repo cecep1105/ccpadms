@@ -31,6 +31,7 @@ FROM python:3.11-slim AS base
 # libjpeg62-turbo-dev zlib1g-dev: Pillow, dukungan format gambar lengkap.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    iputils-ping \
     cmake \
     libopenblas-dev \
     liblapack-dev \
@@ -55,6 +56,8 @@ RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir mysqlclient  # driver alternatif performa lebih baik, opsional dipakai
 
 COPY docker/django/entrypoint.sh /entrypoint.sh
+COPY docker/.env .
+
 RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
