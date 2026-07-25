@@ -1,4 +1,4 @@
-name: ccpadms-test-prod
+name: adms
 
 services:
   redis:
@@ -82,6 +82,7 @@ services:
         MCLOCK_MSSQL_USERNAME: ${MCLOCK_MSSQL_USERNAME:-}
         MCLOCK_MSSQL_PASSWORD_ENCRYPTED: ${MCLOCK_MSSQL_PASSWORD_ENCRYPTED:-}
         MCLOCK_MSSQL_TDS_VERSION: ${MCLOCK_MSSQL_TDS_VERSION:-7.0}
+        ICLOCK_LEGACY_DBCRED: ${ICLOCK_LEGACY_DBCRED:-}        
       RUN_MIGRATIONS: "true"  # HANYA service ini yang migrate/collectstatic, lihat entrypoint.sh
     volumes:
       - ..:/app
@@ -126,9 +127,10 @@ services:
       - "8100:8000"
 
   django-celery:
-    build:
-      context: ..
-      dockerfile: docker/django/Dockerfile
+    # build:
+    #   context: ..
+    #   dockerfile: docker/django/Dockerfile
+    image: adms-django-web
     restart: unless-stopped
     command: ["celery", "-A", "config", "worker", "--loglevel=info", "--concurrency=2"]
     environment:
