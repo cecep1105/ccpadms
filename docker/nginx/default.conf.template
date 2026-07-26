@@ -28,7 +28,7 @@ upstream nextjs_upstream {
 }
 
 upstream djangodev_upstream {
-    server 172.16.10.195}:8000;
+    server 172.16.10.195:8000;
 }
 
 upstream nextjsdev_upstream {
