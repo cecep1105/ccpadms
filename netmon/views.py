@@ -75,7 +75,7 @@ class RouterOSCommandView(APIView):
 
         page = int(request.query_params.get('_page', 1))
         limit = int(request.query_params.get('_limit', 10))
-        sort_by = request.query_params.get('_sort_by', 'id')
+        sort_by = request.query_params.get('_sort_by', 'id').replace("_", "-")
         order = request.query_params.get('_order', 'asc')
 
 
