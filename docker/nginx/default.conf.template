@@ -28,11 +28,11 @@ upstream nextjs_upstream {
 }
 
 upstream djangodev_upstream {
-    server 172.16.10.195:8000;
+    server ${DEV_SERVER_IP}:8000;
 }
 
 upstream nextjsdev_upstream {
-    server 172.16.10.195:3000;
+    server ${DEV_SERVER_IP}:3000;
 }
 
 
@@ -42,7 +42,7 @@ upstream nextjsdev_upstream {
 # jalur terenkripsi. ---
 server {
     listen 80;
-    server_name infrabot.hibautama.com;
+    server_name ${PROD_SERVER};
 
     # PENTING -- port di sini HARUS SAMA PERSIS dgn port HOST yang dipetakan
     # ke 443 container ini di docker-compose.yml (default "8443:443", lihat
@@ -64,7 +64,7 @@ server {
 
 server {
     listen 8043 ssl http2;
-    server_name infrabot.hibautama.com;
+    server_name ${PROD_SERVER};
 
     # --- Sertifikat -- lihat docker/nginx/certs/README.md cara generate
     # (self-signed utk testing) ATAU pasang sertifikat asli (mis. Sectigo
@@ -180,12 +180,12 @@ server {
 #2. SERVE DJANOGO FRONTEND - PRODUCTION
 server {
     listen 81;
-    server_name infrabot.hibautama.com;
+    server_name ${PROD_SERVER};
     return 301 https://$host:8143$request_uri;
 }
 server {
     listen 8143 ssl http2;
-    server_name infrabot.hibautama.com;
+    server_name ${PROD_SERVER};
     ssl_certificate     /etc/nginx/certs/fullchain.pem;
     ssl_certificate_key /etc/nginx/certs/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
@@ -217,13 +217,13 @@ server {
 
 ### SERVE NEXTJS FRONTEND - DEVELOPMENT
 server {
-    listen 82
-    server_name infradev.hibautama.com;
+    listen 82;
+    server_name ${DEV_SERVER};
     return 301 https://$host:8243$request_uri;
 }
 server {
     listen 8243 ssl http2;
-    server_name infradev.hibautama.com;
+    server_name ${DEV_SERVER};
     ssl_certificate     /etc/nginx/certs/fullchain.pem;
     ssl_certificate_key /etc/nginx/certs/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
@@ -304,12 +304,12 @@ server {
 ### SERVE DJANGO FRONTEND - DEVELOPMENT
 server {
     listen 83;
-    server_name infradev.hibautama.com;
+    server_name ${DEV_SERVER};
     return 301 https://$host:8343$request_uri;
 }
 server {
     listen 8343 ssl http2;
-    server_name infradev.hibautama.com;
+    server_name ${DEV_SERVER};
     ssl_certificate     /etc/nginx/certs/fullchain.pem;
     ssl_certificate_key /etc/nginx/certs/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
