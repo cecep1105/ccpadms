@@ -103,6 +103,7 @@ class RouterOSCommandView(APIView):
             return Response({
                 "command": formatted_cmd,
                 "count": len(result),
+                "page": page,
                 "results": paginated_data,
                 "next": page + 1 if end < len(result) else None,
                 "previous": page - 1 if page > 1 else None,
