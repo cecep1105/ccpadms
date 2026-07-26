@@ -208,9 +208,9 @@ services:
       - "8336:83"    # HTTP -- otomatis redirect ke HTTPS (lihat nginx.conf), sesuaikan port host kalau perlu
       - "8343:8343"   # HTTPS -- port UTAMA yang dipakai browser/device, sesuaikan port host kalau perlu
     environment:
-      - PROD_SERVER=${PROD_SERVER}
-      - DEV_SERVER=${DEV_SERVER}
-      - DEV_SERVER_IP=${DEV_SERVER_IP}
+      - PROD_SERVER
+      - DEV_SERVER
+      - DEV_SERVER_IP
     volumes:
       # - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro      
