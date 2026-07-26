@@ -197,7 +197,7 @@ services:
     ports:
       # Serve NEXTJS Frontend
       - "8036:80"    # HTTP -- otomatis redirect ke HTTPS (lihat nginx.conf), sesuaikan port host kalau perlu
-      - "8043:443"   # HTTPS -- port UTAMA yang dipakai browser/device, sesuaikan port host kalau perlu
+      - "8043:8043"   # HTTPS -- port UTAMA yang dipakai browser/device, sesuaikan port host kalau perlu
       # Serve DJANGO Frontend
       - "8136:81"    # HTTP -- otomatis redirect ke HTTPS (lihat nginx.conf), sesuaikan port host kalau perlu
       - "8143:8143"   # HTTPS -- port UTAMA yang dipakai browser/device, sesuaikan port host kalau perlu
