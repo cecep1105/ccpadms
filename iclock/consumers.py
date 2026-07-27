@@ -26,8 +26,23 @@ class IclockConsumer(AsyncWebsocketConsumer):
         user = self.scope.get('user')
         # Guest (belum login) ditolak -- cuma user dashboard yang sudah
         # login (session cookie sama dengan dashboard, lewat AuthMiddlewareStack
-        # di config/asgi.py) yang boleh konek & join group 'iclock'.
+        # di config/asgi.py) ATAU JWT valid (frontend Next.js, lewat
+        # JWTAuthMiddleware di iclock/ws_auth.py) yang boleh konek & join
+        # group 'iclock'.
         if user is None or not user.is_authenticated:
+            # PENTING: SEBELUMNYA baris ini TIDAK logging apa pun -- kalau
+            # koneksi ditolak (mis. token JWT tidak valid/kadaluarsa, atau
+            # session tidak ada), TIDAK ADA JEJAK sama sekali di log,
+            # jadi susah dibedakan dari "request memang tidak pernah
+            # sampai ke Django sama sekali" (mis. salah routing nginx).
+            # Sekarang ke-log eksplisit, supaya kedua kemungkinan itu bisa
+            # dibedakan dari log django-web.
+            logger.warning(
+                "WS iclock: koneksi DITOLAK (user tidak terautentikasi -- "
+                "cek token JWT di query string ?token= atau session cookie). "
+                "query_string=%s",
+                self.scope.get('query_string', b'').decode(errors='replace'),
+            )
             await self.close(code=4001)
             return
 
@@ -37,6 +52,7 @@ class IclockConsumer(AsyncWebsocketConsumer):
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(GROUP_ICLOCK, self.channel_name)
+        logger.info("WS iclock: koneksi terputus (channel=%s, close_code=%s)", self.channel_name, close_code)
 
     async def receive(self, text_data=None, bytes_data=None):
         # One-way (server -> client) -- pesan dari client sengaja diabaikan.

@@ -64,7 +64,7 @@ class RegisteredDeviceSerializer(serializers.ModelSerializer):
         model = RegisteredDevice
         fields = [
             'id', 'SN', 'DeviceName', 'DeptID', 'DeptName', 'Function',
-            'IPAddress', 'MAC', 'IPRouter',
+            'IPAddress', 'MAC', 'IPRouter','LastActivity'
         ]
         read_only_fields = ['id']
 

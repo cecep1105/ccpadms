@@ -308,7 +308,16 @@ CHANNEL_LAYERS = {
         'CONFIG': {
             "hosts": [
                 {
-                    "address": "redis://127.0.0.1:6379/0",
+                    # SEBELUMNYA hardcode "127.0.0.1" -- cuma kebetulan
+                    # kepakai selama Django & Redis SELALU di mesin yang
+                    # SAMA (dev lokal biasa). Begitu dijalankan di Docker
+                    # (Redis di container TERPISAH, dijangkau lewat nama
+                    # service `redis`, BUKAN 127.0.0.1 dari dalam
+                    # container django-web/django-celery), koneksi gagal
+                    # total (Connection refused) -- CELERY_BROKER_URL di
+                    # bawah SUDAH benar pakai REDIS_HOST/REDIS_PORT,
+                    # cuma yang ini kelupaan disamakan.
+                    "address": f"redis://{REDIS_HOST}:{REDIS_PORT}/0",
                     "socket_timeout": None,
                 }
             ],
@@ -442,8 +451,3 @@ LOGGING = {
         'mclock': {'handlers': ['console'], 'level': 'DEBUG' if DEBUG else 'INFO', 'propagate': False},
     },
 }
-
-
-#NETMON configuration
-MIKROTIK_ENCRYPTION_KEY = env('MIKROTIK_ENCRYPTION_KEY', default='')
-MIKROTIK_PASSWORD_ENCRYPTED=env('MIKROTIK_PASSWORD_ENCRYPTED', default='')

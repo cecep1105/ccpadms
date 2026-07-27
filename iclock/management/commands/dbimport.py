@@ -47,7 +47,7 @@ class Command(BaseCommand):
             from datetime import datetime, timedelta
             from iclock.models import RegisteredDevice, department
             ten_days_ago = datetime.now() - timedelta(days=10)
-            engine = create_engine('mysql+pymysql://adms:ad123@172.16.10.35/dbabsen')
+            engine = create_engine(settings.ICLOCK_LEGACY_DBCRED)
             conn = engine.connect()
             metadata = MetaData()
             ic = Table('absensi_iclock', metadata,autoload_with=engine)
@@ -87,7 +87,7 @@ class Command(BaseCommand):
             import ipaddress
 
             ten_days_ago = datetime.now() - timedelta(days=10)
-            engine = create_engine('mysql+pymysql://adms:ad123@172.16.10.35/dbabsen')
+            engine = create_engine(settings.ICLOCK_LEGACY_DBCRED)
             conn = engine.connect()
             metadata = MetaData()
             iclock = Table('absensi_iclock', metadata,autoload_with=engine)

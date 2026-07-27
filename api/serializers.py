@@ -6,6 +6,8 @@ User = get_user_model()
 
 class UserSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(read_only=True)
+    can_transfer_finger = serializers.SerializerMethodField()
+    can_view_attendance_recap = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -14,8 +16,23 @@ class UserSerializer(serializers.ModelSerializer):
             'phone_number', 'department', 'title', 'auth_source',
             'is_active', 'is_staff', 'is_superuser', 'must_change_password',
             'created_at', 'updated_at',
+            # Izin fitur granular utk user NON-staff (lihat
+            # iclock/models.py::FeaturePermission & dashboard "Kelola Izin
+            # User") -- staff/superuser otomatis True utk keduanya (efektif
+            # selalu punya akses), dipakai frontend Next.js utk tahu kartu
+            # mana yang perlu ditampilkan di halaman non-staff.
+            'can_transfer_finger', 'can_view_attendance_recap',
         ]
-        read_only_fields = ['id', 'username', 'auth_source', 'is_superuser', 'created_at', 'updated_at']
+        read_only_fields = [
+            'id', 'username', 'auth_source', 'is_superuser', 'created_at', 'updated_at',
+            'can_transfer_finger', 'can_view_attendance_recap',
+        ]
+
+    def get_can_transfer_finger(self, obj):
+        return bool(obj.is_staff or obj.is_superuser or obj.has_perm('iclock.can_transfer_finger'))
+
+    def get_can_view_attendance_recap(self, obj):
+        return bool(obj.is_staff or obj.is_superuser or obj.has_perm('iclock.can_view_attendance_recap'))
 
 
 class LoginSerializer(serializers.Serializer):
