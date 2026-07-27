@@ -53,3 +53,7 @@ portalocker>=2.8
 
 #untuk koneksi ke host database legacy mysql tanpa ORM
 SQLAlchemy>=2.0.51
+
+
+#Untuk network monitoring via mikrotik
+RouterOS-api>=0.21.0

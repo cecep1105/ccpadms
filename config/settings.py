@@ -85,6 +85,7 @@ INSTALLED_APPS = [
     'iclock',
     'mclock',
     'mattendance',
+    'netmon'
 ]
 
 MIDDLEWARE = [
@@ -450,5 +451,3 @@ LOGGING = {
         'mclock': {'handlers': ['console'], 'level': 'DEBUG' if DEBUG else 'INFO', 'propagate': False},
     },
 }
-
-ICLOCK_LEGACY_DBCRED=env('ICLOCK_LEGACY_DBCRED', default='')
