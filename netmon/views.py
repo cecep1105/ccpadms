@@ -19,7 +19,6 @@ class RouterOSCommandView(APIView):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # Router connection configurations
         self.username = 'admin'
         self.port = 8728
         self.connection = None
@@ -66,7 +65,7 @@ class RouterOSCommandView(APIView):
         params = request.GET.copy()
 
         # 2. Define your regex pattern for keys to remove
-        pattern = re.compile(r"^_page|^_limit|^_order|^_sortby")
+        pattern = re.compile(r"^_page|^_limit|^_order|^_sortby|^_q")
 
         # 3. Find and delete keys matching the regex
         for key in list(params.keys()):
@@ -77,7 +76,15 @@ class RouterOSCommandView(APIView):
         limit = int(request.query_params.get('_limit', 10))
         sort_by = request.query_params.get('_sort_by', 'id').replace("_", "-")
         order = request.query_params.get('_order', 'asc')
+        search_query = request.GET.get('_q', '').lower()
 
+        search_fields = [
+            field.strip()
+            for field in request.GET.get("_search_fields", "").split(",")
+            if field.strip()
+        ]
+
+       
 
         if not command:
             return Response({"error": "Command is required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -85,12 +92,20 @@ class RouterOSCommandView(APIView):
         try:
             # Replaces URL dash-syntax with slash-syntax for ROS, e.g., 'system-resource' -> '/system/resource'
             # 'ip-dhcp_server-lease' -> '/ip/dhcp-server/lease'
-
             mapping = {"_": "-", "-": "/"}
             pattern = re.compile("|".join(re.escape(key) for key in mapping.keys()))
             fcmd = pattern.sub(lambda match: mapping[match.group(0)], command)
             formatted_cmd = '/' + fcmd
             result = self.api.get_resource(formatted_cmd).get(**params.dict())
+
+            if search_query and search_fields:
+                result = [
+                    item for item in result
+                    if any(
+                        search_query in str(item.get(field, "")).lower()
+                        for field in search_fields
+                    )
+                ]
 
             # 4. Sort Python list (handling strings)
             reverse = True if order == 'desc' else False
@@ -122,7 +137,6 @@ class RouterOSCommandView(APIView):
         try:
             # Replaces URL dash-syntax with slash-syntax for ROS, e.g., 'system-resource' -> '/system/resource'
             # 'ip-dhcp_server-lease' -> '/ip/dhcp-server/lease'
-
             postcmd = request.GET.get('postcmd','')
             mapping = {"_": "-", "-": "/"}
             pattern = re.compile("|".join(re.escape(key) for key in mapping.keys()))
