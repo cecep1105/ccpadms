@@ -191,3 +191,37 @@ class ADGroupMembershipView(APIView):
             return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
         return Response({'success': True, 'message': message}, status=status.HTTP_200_OK)
+
+
+class ADResetPasswordView(APIView):
+    """
+    POST /api/v1/netmgmt/ad/reset-password/
+    Body: {"user_dn": "...", "new_password": "..."}
+
+    PENTING -- AD MEWAJIBKAN koneksi TERENKRIPSI (LDAPS/StartTLS) utk
+    operasi ubah password (atribut `unicodePwd`, format UTF-16-LE khusus
+    -- lihat netmgmt/ldap_utils.py::LDAPManagementClient.set_password).
+    Ini BATASAN AD SENDIRI (keamanan bawaan Microsoft), BUKAN keterbatasan
+    kode ini -- kalau AD_USE_SSL=False di .env, operasi ini AKAN GAGAL,
+    pesan errornya menyebutkan ini secara eksplisit.
+    """
+    permission_classes = [IsAuthenticated, IsStaffRole]
+
+    def post(self, request):
+        user_dn = request.data.get('user_dn')
+        new_password = request.data.get('new_password')
+
+        if not user_dn or not new_password:
+            return Response({'error': "Wajib isi 'user_dn' dan 'new_password'."}, status=status.HTTP_400_BAD_REQUEST)
+        if len(new_password) < 8:
+            # AD SENDIRI biasanya punya password policy lebih ketat (kompleksitas dkk) --
+            # ini cuma validasi MINIMAL di sisi kita, AD tetap bisa menolak dgn alasan lain.
+            return Response({'error': 'Password baru minimal 8 karakter.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            with _get_ad_client() as client:
+                client.set_password(user_dn, new_password, use_ad_method=True)
+        except LDAPManagementError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        return Response({'success': True, 'message': 'Password berhasil direset.'}, status=status.HTTP_200_OK)

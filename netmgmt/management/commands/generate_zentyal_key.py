@@ -19,8 +19,3 @@ class Command(BaseCommand):
         self.stdout.write('')
         self.stdout.write(f'ZENTYAL_ENCRYPTION_KEY={key}')
         self.stdout.write('')
-        self.stdout.write(self.style.WARNING(
-            'PENTING: simpan key ini baik-baik & JANGAN sampai hilang/berubah. Setelah key ini '
-            'disimpan di .env, jalankan "python manage.py encrypt_zentyal_password" untuk enkripsi '
-            'password bind Zentyal Anda.'
-        ))

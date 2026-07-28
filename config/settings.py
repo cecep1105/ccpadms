@@ -479,25 +479,21 @@ AD_CONNECT_TIMEOUT = env.int('AD_CONNECT_TIMEOUT', default=5)
 AD_MAX_FETCH_ROWS = env.int('AD_MAX_FETCH_ROWS', default=5000)
 
 # --- Koneksi Zentyal LDAP (netmgmt) -- mail server Zentyal 3.4, backend
-# Courier (lihat skema authldap.ldif: CourierMailAccount/CourierMailAlias).
-# User: kombinasi posixAccount+inetOrgPerson+usereboxmail (SEMUA di 1
-# entry). Group: posixGroup (memberUid) -- TIDAK ADA objectClass custom
-# "zentyalGroup" di schema yang di-cek, jadi kemungkinan besar grup biasa
-# (bukan distribution list) HANYA posixGroup. Kode di netmgmt/zentyal_view.py
-# dibuat ADAPTIF (cek atribut member/memberUid mana yang ADA di tiap grup,
-# bukan asumsi 1 gaya tetap) -- tapi TETAP VERIFIKASI ke data live Anda
-# (ldapsearch) kalau ada perilaku tidak terduga.
+# Courier. User: posixAccount+inetOrgPerson+usereboxmail (1 entry). Group:
+# posixGroup (memberUid) -- TIDAK ADA objectClass custom "zentyalGroup" di
+# schema yang di-cek, jadi kemungkinan besar grup biasa HANYA posixGroup.
+# Kode di netmgmt/zentyal_view.py ADAPTIF (cek atribut member/memberUid
+# mana yang ADA di tiap grup) -- TETAP VERIFIKASI ke data live Anda.
 #
 # CATATAN dari user: SSL ke server LDAP Zentyal ini SAAT INI tidak bisa
-# konek (penyebab belum diketahui) -- default AD_USE_SSL=False DULU
-# (rencana migrasi LDAP versi baru + SSL menyusul, belum sekarang).
+# konek (penyebab belum diketahui) -- default AD_USE_SSL=False DULU.
 ZENTYAL_ENCRYPTION_KEY = env('ZENTYAL_ENCRYPTION_KEY', default='')
 ZENTYAL_SERVER_URI = env('ZENTYAL_SERVER_URI', default='')
-ZENTYAL_BIND_DN = env('ZENTYAL_BIND_DN', default='')  # mis. 'cn=zentyal,dc=hibautama,dc=com' (lihat creatorsName di schema Anda)
+ZENTYAL_BIND_DN = env('ZENTYAL_BIND_DN', default='')
 ZENTYAL_BIND_PASSWORD_ENCRYPTED = env('ZENTYAL_BIND_PASSWORD_ENCRYPTED', default='')
-ZENTYAL_BASE_DN = env('ZENTYAL_BASE_DN', default='')  # mis. 'dc=hibautama,dc=com'
+ZENTYAL_BASE_DN = env('ZENTYAL_BASE_DN', default='')
 ZENTYAL_USER_BASE_DN = env('ZENTYAL_USER_BASE_DN', default='') or ZENTYAL_BASE_DN
 ZENTYAL_GROUP_BASE_DN = env('ZENTYAL_GROUP_BASE_DN', default='') or ZENTYAL_BASE_DN
-ZENTYAL_USE_SSL = env.bool('ZENTYAL_USE_SSL', default=False)  # default False -- SSL belum bisa konek (lihat catatan di atas)
+ZENTYAL_USE_SSL = env.bool('ZENTYAL_USE_SSL', default=False)
 ZENTYAL_CONNECT_TIMEOUT = env.int('ZENTYAL_CONNECT_TIMEOUT', default=5)
 ZENTYAL_MAX_FETCH_ROWS = env.int('ZENTYAL_MAX_FETCH_ROWS', default=5000)

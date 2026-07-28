@@ -4,6 +4,7 @@ from .active_directory_view import (
     ADGroupListView,
     ADGroupMembersView,
     ADGroupMembershipView,
+    ADResetPasswordView,
     ADUserListView,
 )
 from .routeros_api_view import RouterOSCommandView
@@ -11,6 +12,7 @@ from .zentyal_view import (
     ZentyalGroupListView,
     ZentyalGroupMembersView,
     ZentyalGroupMembershipView,
+    ZentyalResetPasswordView,
     ZentyalUserListView,
 )
 
@@ -23,14 +25,14 @@ urlpatterns = [
     # --- Active Directory -- lihat netmgmt/active_directory_view.py ---
     path('ad/users/', ADUserListView.as_view(), name='ad-users'),
     path('ad/groups/', ADGroupListView.as_view(), name='ad-groups'),
-    # <path:group_dn> (bukan <str:>) -- DN LDAP mengandung karakter "/" JARANG tapi mungkin
-    # (mis. dlm CN yg aneh), & PASTI mengandung koma -- <path:> lebih permisif drpd <str:>.
     path('ad/groups/<path:group_dn>/members/', ADGroupMembersView.as_view(), name='ad-group-members'),
     path('ad/group-membership/', ADGroupMembershipView.as_view(), name='ad-group-membership'),
+    path('ad/reset-password/', ADResetPasswordView.as_view(), name='ad-reset-password'),
 
     # --- Zentyal LDAP (mail server) -- lihat netmgmt/zentyal_view.py ---
     path('zentyal/users/', ZentyalUserListView.as_view(), name='zentyal-users'),
     path('zentyal/groups/', ZentyalGroupListView.as_view(), name='zentyal-groups'),
     path('zentyal/groups/<path:group_dn>/members/', ZentyalGroupMembersView.as_view(), name='zentyal-group-members'),
     path('zentyal/group-membership/', ZentyalGroupMembershipView.as_view(), name='zentyal-group-membership'),
+    path('zentyal/reset-password/', ZentyalResetPasswordView.as_view(), name='zentyal-reset-password'),
 ]

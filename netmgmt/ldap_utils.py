@@ -15,7 +15,7 @@ pemanggilnya (AD atau Zentyal, connection settings beda sumbernya).
 """
 import logging
 
-from ldap3 import ALL_ATTRIBUTES, MODIFY_ADD, MODIFY_DELETE, SUBTREE, Connection, Server
+from ldap3 import ALL_ATTRIBUTES, MODIFY_ADD, MODIFY_DELETE, MODIFY_REPLACE, SUBTREE, Connection, Server
 from ldap3.core.exceptions import LDAPException
 from ldap3.utils.conv import escape_filter_chars
 
@@ -86,7 +86,7 @@ class LDAPManagementClient:
             raise LDAPManagementError(f'Pencarian LDAP gagal: {exc}') from exc
 
     def add_member(self, group_dn: str, member_dn: str) -> None:
-        """Tambah 1 DN (user) ke atribut `member` sebuah group (skema AD/groupOfNames/zentyalDistributionGroup)."""
+        """Tambah 1 DN (user) ke atribut `member` sebuah group (skema AD/groupOfNames -- lihat catatan Zentyal kalau skemanya beda)."""
         self._modify_member(group_dn, member_dn, MODIFY_ADD)
 
     def remove_member(self, group_dn: str, member_dn: str) -> None:
@@ -110,6 +110,38 @@ class LDAPManagementClient:
                 raise LDAPManagementError(f'Modify group (memberUid) gagal: {self._connection.result}')
         except LDAPException as exc:
             raise LDAPManagementError(f'Modify group (memberUid) gagal: {exc}') from exc
+
+    def set_password(self, user_dn: str, new_password: str, *, use_ad_method: bool = False) -> None:
+        """
+        Reset password user -- 2 METODE BEDA tergantung server:
+
+        - AD (`use_ad_method=True`): AD TIDAK PAKAI userPassword biasa --
+          WAJIB set atribut `unicodePwd` dgn format KHUSUS (UTF-16-LE,
+          nilai dibungkus tanda kutip: '"password"'.encode('utf-16-le')).
+          Microsoft AD JUGA MEWAJIBKAN koneksi terenkripsi (LDAPS/StartTLS)
+          utk operasi ini -- AD akan MENOLAK modify ini di koneksi plain
+          LDAP (bukan batasan kode ini, tapi batasan AD SENDIRI demi
+          keamanan, tidak bisa di-workaround dari sisi client).
+        - OpenLDAP/Zentyal (`use_ad_method=False`): pakai LDAP Password
+          Modify Extended Operation (RFC 3062) -- server yang urus hashing
+          (biasanya jadi SSHA), client cuma kirim plaintext lewat operasi
+          KHUSUS ini (BEDA dari modify() atribut biasa).
+        """
+        if not self._connection:
+            raise LDAPManagementError('Koneksi belum dibuka -- pakai dgn `with LDAPManagementClient(...) as client:`.')
+        try:
+            if use_ad_method:
+                encoded_pwd = f'"{new_password}"'.encode('utf-16-le')
+                ok = self._connection.modify(user_dn, {'unicodePwd': [(MODIFY_REPLACE, [encoded_pwd])]})
+                if not ok:
+                    raise LDAPManagementError(
+                        f'Reset password AD gagal: {self._connection.result} -- PALING SERING krn koneksi '
+                        'BUKAN LDAPS/StartTLS (AD mewajibkan enkripsi utk operasi ini, cek AD_USE_SSL di .env).'
+                    )
+            else:
+                self._connection.extend.standard.modify_password(user_dn, new_password=new_password)
+        except LDAPException as exc:
+            raise LDAPManagementError(f'Reset password gagal: {exc}') from exc
 
     def _modify_member(self, group_dn: str, member_dn: str, operation) -> None:
         if not self._connection:

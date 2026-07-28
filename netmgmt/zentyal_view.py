@@ -1,6 +1,7 @@
 """
 Endpoint manajemen Zentyal LDAP (mail server Zentyal 3.4, backend
-Courier) -- lihat users & groups, tambah/hapus user dari group.
+Courier) -- lihat users & groups, tambah/hapus user dari group, reset
+password.
 
 SKEMA (dikonfirmasi dari export schema `/etc/ldap/slapd.d` milik user,
 BUKAN tebakan) -- lihat detail lengkap di config/settings.py bagian
@@ -23,7 +24,10 @@ kabari -- gampang disesuaikan.
 
 CATATAN: SSL ke server ini SAAT INI tidak bisa konek (belum diketahui
 penyebabnya, ada rencana migrasi LDAP + SSL nanti) -- default konfigurasi
-`ZENTYAL_USE_SSL=False` (plain LDAP, port 389 biasa).
+`ZENTYAL_USE_SSL=False` (plain LDAP, port 389 biasa). BEDA dari AD, reset
+password OpenLDAP (lihat ZentyalResetPasswordView di bawah) TIDAK
+MEWAJIBKAN SSL scr protokol (walau tetap disarankan demi keamanan) --
+LDAP Password Modify Extended Operation bisa jalan di koneksi plain.
 """
 from django.conf import settings
 from rest_framework import status
@@ -162,13 +166,11 @@ class ZentyalGroupMembersView(APIView):
 
                 members = []
                 if kind == 'distribution':
-                    # member = FULL DN -- langsung search per-DN (sama pola dgn Active Directory).
                     for member_dn in (group_entry.get('member') or []):
                         user_rows = client.search(member_dn, '(objectClass=posixAccount)', attributes=['uid', 'cn', 'mail'])
                         if user_rows:
                             members.append(_user_to_dict(user_rows[0]))
                 else:
-                    # memberUid = STRING uid -- cari user by uid, BUKAN by DN.
                     for uid in (group_entry.get('memberUid') or []):
                         user_rows = client.search(
                             settings.ZENTYAL_USER_BASE_DN,
@@ -187,11 +189,6 @@ class ZentyalGroupMembershipView(APIView):
     """
     POST /api/v1/netmgmt/zentyal/group-membership/
     Body: {"group_dn": "...", "user_uid": "...", "user_dn": "...", "action": "add"|"remove"}
-
-    PENTING: kirim KEDUANYA (`user_uid` DAN `user_dn`) -- endpoint ini
-    otomatis pilih salah satu tergantung jenis group (posixGroup pakai
-    user_uid, zentyalDistributionGroup pakai user_dn), frontend tidak
-    perlu tahu/pilih sendiri jenis groupnya.
     """
     permission_classes = [IsAuthenticated, IsStaffRole]
 
@@ -230,3 +227,34 @@ class ZentyalGroupMembershipView(APIView):
 
         message = 'User berhasil ditambahkan ke group.' if action == 'add' else 'User berhasil dihapus dari group.'
         return Response({'success': True, 'message': message}, status=status.HTTP_200_OK)
+
+
+class ZentyalResetPasswordView(APIView):
+    """
+    POST /api/v1/netmgmt/zentyal/reset-password/
+    Body: {"user_dn": "...", "new_password": "..."}
+
+    Pakai LDAP Password Modify Extended Operation (RFC 3062) -- server
+    OpenLDAP yang urus hashing (mis. jadi SSHA), TIDAK MEWAJIBKAN SSL scr
+    protokol (beda dari AD yang wajib LDAPS/StartTLS utk unicodePwd) --
+    tapi TETAP disarankan pakai koneksi terenkripsi demi keamanan kalau
+    servernya mendukung (lihat rencana migrasi LDAP Anda).
+    """
+    permission_classes = [IsAuthenticated, IsStaffRole]
+
+    def post(self, request):
+        user_dn = request.data.get('user_dn')
+        new_password = request.data.get('new_password')
+
+        if not user_dn or not new_password:
+            return Response({'error': "Wajib isi 'user_dn' dan 'new_password'."}, status=status.HTTP_400_BAD_REQUEST)
+        if len(new_password) < 8:
+            return Response({'error': 'Password baru minimal 8 karakter.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            with _get_zentyal_client() as client:
+                client.set_password(user_dn, new_password, use_ad_method=False)
+        except LDAPManagementError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        return Response({'success': True, 'message': 'Password berhasil direset.'}, status=status.HTTP_200_OK)
