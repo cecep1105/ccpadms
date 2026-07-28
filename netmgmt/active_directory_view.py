@@ -71,6 +71,14 @@ def _user_to_dict(entry: dict) -> dict:
     except (TypeError, ValueError):
         uac = 0
     member_of = entry.get('memberOf') or []
+    # lockoutTime: nilai LargeInteger AD -- 0 (atau tidak ada) = TIDAK
+    # terkunci, nilai APA PUN selain 0 = terkunci (menyimpan WAKTU
+    # terkunci, bukan status boolean langsung, tapi cukup cek != 0 saja).
+    # BEDA dari is_enabled (dinonaktifkan MANUAL oleh admin) -- lockout
+    # terjadi OTOMATIS krn salah password berkali-kali, unlock via reset
+    # lockoutTime ke 0 (lihat ADUserUnlockView).
+    lockout_time = _attr(entry, 'lockoutTime', '0')
+    is_locked = str(lockout_time) not in ('0', '', 'None')
     return {
         'dn': entry.get('dn', ''),
         'username': _attr(entry, 'sAMAccountName'),
@@ -78,6 +86,7 @@ def _user_to_dict(entry: dict) -> dict:
         'email': _attr(entry, 'mail'),
         'user_principal_name': _attr(entry, 'userPrincipalName'),
         'is_enabled': not bool(uac & UAC_ACCOUNTDISABLE),
+        'is_locked': is_locked,
         'group_count': len(member_of) if isinstance(member_of, list) else 0,
         'member_of': member_of if isinstance(member_of, list) else [],
     }
@@ -103,7 +112,7 @@ class ADUserListView(APIView):
                 rows = client.search(
                     settings.AD_USER_BASE_DN,
                     '(&(objectClass=user)(objectCategory=person))',
-                    attributes=['sAMAccountName', 'displayName', 'mail', 'userPrincipalName', 'userAccountControl', 'memberOf'],
+                    attributes=['sAMAccountName', 'displayName', 'mail', 'userPrincipalName', 'userAccountControl', 'memberOf', 'lockoutTime'],
                 )
         except LDAPManagementError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
@@ -225,3 +234,88 @@ class ADResetPasswordView(APIView):
             return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
         return Response({'success': True, 'message': 'Password berhasil direset.'}, status=status.HTTP_200_OK)
+
+
+class ADUserToggleStatusView(APIView):
+    """
+    POST /api/v1/netmgmt/ad/users/toggle-status/
+    Body: {"user_dn": "...", "action": "enable"|"disable"}
+
+    Ubah bit ACCOUNTDISABLE (nilai 2) di userAccountControl -- READ dulu
+    nilai SAAT INI (bitmask ini py BANYAK bit lain, mis. NORMAL_ACCOUNT,
+    DONT_EXPIRE_PASSWORD, dst -- TIDAK BOLEH ditimpa asal, cuma bit
+    ACCOUNTDISABLE-nya saja yang diubah, sisanya PERSIS dipertahankan).
+    """
+    permission_classes = [IsAuthenticated, IsStaffRole]
+
+    def post(self, request):
+        user_dn = request.data.get('user_dn')
+        action = request.data.get('action')
+        if not user_dn or action not in ('enable', 'disable'):
+            return Response({'error': "Wajib isi 'user_dn' dan 'action' ('enable' atau 'disable')."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            with _get_ad_client() as client:
+                current_uac = client.get_attribute(user_dn, 'userAccountControl')
+                current_uac = int(current_uac) if current_uac is not None else 0
+                new_uac = (current_uac | UAC_ACCOUNTDISABLE) if action == 'disable' else (current_uac & ~UAC_ACCOUNTDISABLE)
+                client.replace_attribute(user_dn, 'userAccountControl', str(new_uac))
+        except LDAPManagementError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        message = 'User berhasil dinonaktifkan.' if action == 'disable' else 'User berhasil diaktifkan.'
+        return Response({'success': True, 'message': message}, status=status.HTTP_200_OK)
+
+
+class ADLockedUsersListView(APIView):
+    """
+    GET /api/v1/netmgmt/ad/users/locked/?_page=&_limit=&_sort_by=&_order=&_q=&_search_fields=
+    -- daftar user yang TERKUNCI OTOMATIS (lockoutTime != 0, krn salah
+    password berkali-kali) -- BEDA dari user yang DINONAKTIFKAN MANUAL
+    (is_enabled=False, lihat ADUserToggleStatusView) -- 2 status yang
+    TIDAK SALING TERKAIT (bisa aktif tapi terkunci, atau nonaktif tapi
+    tidak pernah terkunci).
+    """
+    permission_classes = [IsAuthenticated, IsStaffRole]
+
+    def get(self, request):
+        try:
+            with _get_ad_client() as client:
+                rows = client.search(
+                    settings.AD_USER_BASE_DN,
+                    '(&(objectClass=user)(objectCategory=person))',
+                    attributes=['sAMAccountName', 'displayName', 'mail', 'userPrincipalName', 'userAccountControl', 'memberOf', 'lockoutTime'],
+                )
+        except LDAPManagementError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        all_users = [_user_to_dict(row) for row in rows]
+        users = [u for u in all_users if u['is_locked']]
+        params = parse_list_params(request)
+        payload = paginate_sort_filter(users, **params)
+        return Response(payload, status=status.HTTP_200_OK)
+
+
+class ADUserUnlockView(APIView):
+    """
+    POST /api/v1/netmgmt/ad/users/unlock/
+    Body: {"user_dn": "..."}
+
+    Reset lockoutTime ke 0 -- cara STANDAR "unlock" akun AD yang terkunci
+    otomatis (BUKAN ubah userAccountControl -- itu utk disable/enable
+    MANUAL, konsep berbeda, lihat catatan di ADLockedUsersListView).
+    """
+    permission_classes = [IsAuthenticated, IsStaffRole]
+
+    def post(self, request):
+        user_dn = request.data.get('user_dn')
+        if not user_dn:
+            return Response({'error': "'user_dn' wajib diisi."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            with _get_ad_client() as client:
+                client.replace_attribute(user_dn, 'lockoutTime', '0')
+        except LDAPManagementError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        return Response({'success': True, 'message': 'User berhasil di-unlock.'}, status=status.HTTP_200_OK)

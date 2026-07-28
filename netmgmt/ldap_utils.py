@@ -14,6 +14,7 @@ langsung di sini, supaya modul ini tetap independen dari SIAPA
 pemanggilnya (AD atau Zentyal, connection settings beda sumbernya).
 """
 import logging
+from typing import Any
 
 from ldap3 import ALL_ATTRIBUTES, MODIFY_ADD, MODIFY_DELETE, MODIFY_REPLACE, SUBTREE, Connection, Server
 from ldap3.core.exceptions import LDAPException
@@ -154,10 +155,7 @@ class LDAPManagementClient:
             raise LDAPManagementError(f'Modify group gagal: {exc}') from exc
 
     def add_entry(self, dn: str, object_classes: list[str], attributes: dict) -> None:
-        """
-        Buat entry LDAP BARU -- generik (BUKAN khusus user/group), dipakai
-        mis. bikin dnsNode baru (lihat netmgmt/active_directory_dns_view.py).
-        """
+        """Buat entry LDAP BARU -- generik, dipakai mis. bikin dnsNode baru (lihat netmgmt/active_directory_dns_view.py)."""
         if not self._connection:
             raise LDAPManagementError('Koneksi belum dibuka -- pakai dgn `with LDAPManagementClient(...) as client:`.')
         try:
@@ -168,12 +166,7 @@ class LDAPManagementClient:
             raise LDAPManagementError(f'Gagal membuat entry LDAP: {exc}') from exc
 
     def modify_raw_attribute(self, dn: str, attribute: str, raw_value: bytes, operation) -> None:
-        """
-        Tambah/hapus 1 VALUE MENTAH (bytes) ke/dari sebuah atribut MULTI-VALUE
-        -- generik, dipakai DNS record (`dnsRecord`, format binary, lihat
-        netmgmt/dns_codec.py) yg BEDA dari member/memberUid (itu string/DN).
-        `operation` = MODIFY_ADD atau MODIFY_DELETE (import dari ldap3).
-        """
+        """Tambah/hapus 1 VALUE MENTAH (bytes) ke/dari atribut multi-value -- generik, dipakai DNS record (`dnsRecord`)."""
         if not self._connection:
             raise LDAPManagementError('Koneksi belum dibuka -- pakai dgn `with LDAPManagementClient(...) as client:`.')
         try:
@@ -184,13 +177,7 @@ class LDAPManagementClient:
             raise LDAPManagementError(f'Modify atribut {attribute} gagal: {exc}') from exc
 
     def replace_raw_attribute_value(self, dn: str, attribute: str, old_value: bytes, new_value: bytes) -> None:
-        """
-        Ganti 1 VALUE MENTAH SPESIFIK di atribut multi-value dgn value BARU --
-        DELETE value lama + ADD value baru dlm SATU modify() call (atomic,
-        LDAP tidak punya operasi "replace 1 dari banyak value" langsung).
-        Dipakai edit record DNS (edit A record yg SALAH SATU dari beberapa
-        A record round-robin di node yg sama, tanpa mengubah yg lain).
-        """
+        """DELETE value lama + ADD value baru dlm SATU modify() call (atomic) -- dipakai edit record DNS spesifik tanpa mengganggu value lain di atribut yg sama."""
         if not self._connection:
             raise LDAPManagementError('Koneksi belum dibuka -- pakai dgn `with LDAPManagementClient(...) as client:`.')
         try:
@@ -202,6 +189,29 @@ class LDAPManagementClient:
                 raise LDAPManagementError(f'Ganti value atribut {attribute} gagal: {self._connection.result}')
         except LDAPException as exc:
             raise LDAPManagementError(f'Ganti value atribut {attribute} gagal: {exc}') from exc
+
+    def get_attribute(self, dn: str, attribute: str) -> Any:
+        """Baca 1 nilai atribut TERKINI dari 1 entry -- dipakai utk READ-MODIFY-WRITE (mis. baca userAccountControl SEBELUM diubah bit-nya, lihat netmgmt/active_directory_view.py::ADUserToggleStatusView)."""
+        if not self._connection:
+            raise LDAPManagementError('Koneksi belum dibuka -- pakai dgn `with LDAPManagementClient(...) as client:`.')
+        rows = self.search(dn, '(objectClass=*)', attributes=[attribute])
+        if not rows:
+            raise LDAPManagementError(f"Entry '{dn}' tidak ditemukan.")
+        value = rows[0].get(attribute)
+        if isinstance(value, list):
+            return value[0] if value else None
+        return value
+
+    def replace_attribute(self, dn: str, attribute: str, value) -> None:
+        """Ganti/set 1 atribut SCALAR (bukan multi-value spt member/dnsRecord) ke nilai BARU -- dipakai mis. toggle userAccountControl (enable/disable) & reset lockoutTime (unlock)."""
+        if not self._connection:
+            raise LDAPManagementError('Koneksi belum dibuka -- pakai dgn `with LDAPManagementClient(...) as client:`.')
+        try:
+            ok = self._connection.modify(dn, {attribute: [(MODIFY_REPLACE, [value])]})
+            if not ok:
+                raise LDAPManagementError(f'Modify atribut {attribute} gagal: {self._connection.result}')
+        except LDAPException as exc:
+            raise LDAPManagementError(f'Modify atribut {attribute} gagal: {exc}') from exc
 
     @staticmethod
     def escape(value: str) -> str:

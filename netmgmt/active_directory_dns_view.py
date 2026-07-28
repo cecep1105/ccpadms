@@ -15,8 +15,18 @@ sebut "Forest" & "non-Forest"):
      `CN=MicrosoftDNS,CN=System,<domain-DN>` -- masih ada di banyak AD lama
      demi kompatibilitas, direplikasi lewat domain naming context biasa.
 
-Endpoint `ADDNSZoneListView` CARI KETIGANYA sekaligus (bukan asumsi 1
-lokasi tetap), tiap hasil ditandai `partition` biar admin tahu asalnya.
+FILTER TAMPILAN (sesuai permintaan -- fokus ke kasus pemakaian PALING
+UMUM, sembunyikan kompleksitas internal AD):
+  - Zone REVERSE lookup (nama berakhiran ".in-addr.arpa"/".ip6.arpa")
+    DISEMBUNYIKAN -- cuma forward zone yang ditampilkan.
+  - Zone BAWAAN AD (`_msdcs.<forest-root>`, `RootDNSServers`,
+    `..TrustAnchors`) DISEMBUNYIKAN -- itu infrastruktur internal AD
+    sendiri (lokasi DC, DNSSEC trust anchor), BUKAN zone yang lazim
+    dikelola admin sehari-hari.
+  - Record TIPE selain A & CNAME DISEMBUNYIKAN dari daftar (tapi kalau
+    ADA record tipe lain di suatu node, node itu TETAP UTUH -- fitur ini
+    cuma tidak MENAMPILKAN/menawarkan edit tipe lain, tidak menghapus
+    apa pun secara diam-diam).
 
 DI DALAM 1 zone, tiap "nama host" (mis. "www" utk www.contoso.com) adalah
 1 OBJEK LDAP TERPISAH (objectClass=dnsNode, RDN `DC=<nama>`), dan SATU
@@ -27,6 +37,7 @@ record utk round-robin DNS). Krn itu, 1 "record" diidentifikasi via
 nama+tipe dlm 1 node).
 """
 import base64
+import re
 
 from django.conf import settings
 from rest_framework import status
@@ -38,8 +49,6 @@ from api.permissions import IsStaffRole
 from ldap3 import MODIFY_ADD, MODIFY_DELETE
 from netmgmt.active_directory_view import _get_ad_client
 from netmgmt.dns_codec import (
-    DNS_TYPE_NAMES,
-    SUPPORTED_WRITE_TYPES,
     DnsCodecError,
     DnsRecord,
     decode_record,
@@ -54,18 +63,34 @@ _ZONE_PARTITIONS = [
     ('legacy', lambda: f'CN=MicrosoftDNS,CN=System,{settings.AD_BASE_DN}'),
 ]
 
+# --- Filter zone: forward-only, sembunyikan zone bawaan AD ---
+_REVERSE_ZONE_PATTERN = re.compile(r'\.(in-addr|ip6)\.arpa$', re.IGNORECASE)
+_AD_BUILTIN_ZONE_NAMES = {'rootdnsservers', '..trustanchors'}
 
-def _zone_container_dn(partition: str) -> str:
-    for name, dn_fn in _ZONE_PARTITIONS:
-        if name == partition:
-            return f'CN=MicrosoftDNS,{dn_fn()}' if partition != 'legacy' else dn_fn()
-    raise LDAPManagementError(f"Partisi zone '{partition}' tidak dikenal.")
+
+def _is_visible_forward_zone(zone_name: str) -> bool:
+    name_lower = (zone_name or '').lower()
+    if not name_lower:
+        return False
+    if _REVERSE_ZONE_PATTERN.search(name_lower):
+        return False  # reverse lookup zone (mis. "1.168.192.in-addr.arpa")
+    if name_lower in _AD_BUILTIN_ZONE_NAMES:
+        return False  # zone infrastruktur AD bawaan
+    if name_lower.startswith('_msdcs.'):
+        return False  # zone lokasi Domain Controller (SRV record internal AD)
+    return True
+
+
+# --- Filter record: cuma A & CNAME yang ditampilkan/bisa dikelola lewat fitur ini ---
+_VISIBLE_RECORD_TYPES = {'A', 'CNAME'}
 
 
 class ADDNSZoneListView(APIView):
     """
-    GET /api/v1/netmgmt/ad/dns/zones/ -- cari zone DNS di KETIGA partisi
-    yang mungkin (forest/domain/legacy), gabungkan hasilnya.
+    GET /api/v1/netmgmt/ad/dns/zones/ -- cari zone DNS FORWARD di KETIGA
+    partisi yang mungkin (forest/domain/legacy), gabungkan hasilnya --
+    zone reverse-lookup & zone bawaan AD (_msdcs, dst) DISEMBUNYIKAN
+    (lihat _is_visible_forward_zone).
     """
     permission_classes = [IsAuthenticated, IsStaffRole]
 
@@ -79,14 +104,14 @@ class ADDNSZoneListView(APIView):
                     try:
                         rows = client.search(container, '(objectClass=dnsZone)', attributes=['dc', 'name'])
                         for row in rows:
-                            zones.append({
-                                'dn': row.get('dn', ''),
-                                'name': row.get('dc') or row.get('name') or '',
-                                'partition': partition,
-                            })
+                            # Sama spt catatan di ADDNSRecordListView -- ldap3 bungkus
+                            # nilai atribut jadi list, WAJIB dibongkar dulu.
+                            dc_value = row.get('dc') or row.get('name') or ''
+                            zone_name = dc_value[0] if isinstance(dc_value, list) and dc_value else dc_value
+                            if not _is_visible_forward_zone(zone_name):
+                                continue
+                            zones.append({'dn': row.get('dn', ''), 'name': zone_name, 'partition': partition})
                     except LDAPManagementError as exc:
-                        # Partisi ini mungkin MEMANG tidak ada (mis. tidak semua AD
-                        # punya ForestDnsZones) -- catat tapi JANGAN gagalkan semuanya.
                         errors.append(f'{partition}: {exc}')
         except LDAPManagementError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
@@ -95,7 +120,10 @@ class ADDNSZoneListView(APIView):
 
 
 class ADDNSRecordListView(APIView):
-    """GET /api/v1/netmgmt/ad/dns/zones/<path:zone_dn>/records/?_page=&_limit=&_sort_by=&_order=&_q=&_search_fields= -- semua record di 1 zone."""
+    """
+    GET /api/v1/netmgmt/ad/dns/zones/<path:zone_dn>/records/?_page=&_limit=&_sort_by=&_order=&_q=&_search_fields=
+    -- record di 1 zone, DIFILTER cuma tipe A & CNAME (lihat _VISIBLE_RECORD_TYPES).
+    """
     permission_classes = [IsAuthenticated, IsStaffRole]
 
     def get(self, request, zone_dn=None):
@@ -107,7 +135,14 @@ class ADDNSRecordListView(APIView):
 
         records = []
         for node in nodes:
-            node_name = node.get('dc', '@')
+            # PENTING: ldap3 SELALU bungkus nilai atribut jadi list (bahkan
+            # utk atribut single-value spt `dc`) -- SEBELUMNYA baris ini
+            # pakai node.get('dc', '@') LANGSUNG tanpa bongkar list, jadi
+            # `node_name` jadi ['mixed'] bukan 'mixed' (ketahuan pas
+            # testing, bandingkan pola yg SAMA dgn _attr() helper di
+            # netmgmt/active_directory_view.py yg SUDAH benar).
+            dc_value = node.get('dc', '@')
+            node_name = dc_value[0] if isinstance(dc_value, list) and dc_value else (dc_value or '@')
             raw_values = node.get('dnsRecord') or []
             if not isinstance(raw_values, list):
                 raw_values = [raw_values]
@@ -116,7 +151,9 @@ class ADDNSRecordListView(APIView):
                 try:
                     decoded = decode_record(raw_bytes)
                 except DnsCodecError:
-                    continue  # record rusak/format asing yg tidak bisa di-parse -- lewati drpd crash seluruh list
+                    continue  # record rusak/format asing -- lewati drpd crash seluruh list
+                if decoded.type_name not in _VISIBLE_RECORD_TYPES:
+                    continue  # sesuai permintaan -- cuma A & CNAME yang ditampilkan
                 records.append({
                     'node_dn': node.get('dn', ''),
                     'name': node_name,
@@ -124,7 +161,7 @@ class ADDNSRecordListView(APIView):
                     'ttl_seconds': decoded.ttl_seconds,
                     'data': decoded.data,
                     'raw_b64': base64.b64encode(raw_bytes).decode('ascii'),
-                    'editable': decoded.type_name in {DNS_TYPE_NAMES[t] for t in SUPPORTED_WRITE_TYPES},
+                    'editable': True,  # A & CNAME KEDUANYA didukung tulis penuh (lihat dns_codec.py::SUPPORTED_WRITE_TYPES)
                 })
 
         params = parse_list_params(request)
@@ -135,9 +172,14 @@ class ADDNSRecordListView(APIView):
 class ADDNSRecordActionView(APIView):
     """
     POST /api/v1/netmgmt/ad/dns/records/
-    Body tambah:  {"action": "add", "zone_dn": "...", "name": "www", "type": "A", "data": {"address": "1.2.3.4"}, "ttl_seconds": 3600}
-    Body edit:    {"action": "edit", "node_dn": "...", "old_raw_b64": "...", "type": "A", "data": {...}, "ttl_seconds": 3600}
+    Body tambah:  {"action": "add", "zone_dn": "...", "name": "www", "type": "A"|"CNAME", "data": {...}, "ttl_seconds": 3600}
+    Body edit:    {"action": "edit", "node_dn": "...", "old_raw_b64": "...", "type": "A"|"CNAME", "data": {...}, "ttl_seconds": 3600}
     Body hapus:   {"action": "delete", "node_dn": "...", "old_raw_b64": "..."}
+
+    Sesuai permintaan, endpoint ini HANYA terima tipe A & CNAME (biar pun
+    dns_codec.py sendiri MENDUKUNG lebih banyak tipe -- pembatasan ini
+    SENGAJA di level view, bukan di codec, supaya codec tetap generik
+    kalau nanti perlu dibuka lagi ke tipe lain).
     """
     permission_classes = [IsAuthenticated, IsStaffRole]
 
@@ -161,8 +203,8 @@ class ADDNSRecordActionView(APIView):
 
     def _build_record(self, request) -> DnsRecord:
         type_name = request.data.get('type')
-        if type_name not in {DNS_TYPE_NAMES[t] for t in SUPPORTED_WRITE_TYPES}:
-            raise DnsCodecError(f"Tipe '{type_name}' tidak didukung utk ditulis (lihat netmgmt/dns_codec.py::SUPPORTED_WRITE_TYPES).")
+        if type_name not in _VISIBLE_RECORD_TYPES:
+            raise DnsCodecError(f"Tipe '{type_name}' tidak didukung -- fitur ini hanya menerima A & CNAME.")
         return DnsRecord(
             type_name=type_name,
             data=request.data.get('data') or {},
@@ -182,7 +224,6 @@ class ADDNSRecordActionView(APIView):
         with _get_ad_client() as client:
             existing = client.search(zone_dn, f'(&(objectClass=dnsNode)(dc={LDAPManagementClient.escape(name)}))', attributes=['dc'])
             if existing:
-                # Node SUDAH ADA (mis. mau tambah A record ke-2 utk round-robin) -- tambah value BARU ke dnsRecord yg sudah ada, JANGAN timpa.
                 client.modify_raw_attribute(existing[0]['dn'], 'dnsRecord', encoded, MODIFY_ADD)
             else:
                 client.add_entry(node_dn, ['top', 'dnsNode'], {'dnsRecord': [encoded]})
@@ -200,8 +241,6 @@ class ADDNSRecordActionView(APIView):
         old_encoded = base64.b64decode(old_raw_b64)
 
         with _get_ad_client() as client:
-            # LDAP tidak punya "replace 1 value dari banyak value" langsung --
-            # hapus value LAMA + tambah value BARU, 2 operasi dlm 1 modify() (atomic).
             client.replace_raw_attribute_value(node_dn, 'dnsRecord', old_encoded, new_encoded)
 
         return Response({'success': True, 'message': 'Record berhasil diperbarui.'}, status=status.HTTP_200_OK)
@@ -215,9 +254,5 @@ class ADDNSRecordActionView(APIView):
         old_encoded = base64.b64decode(old_raw_b64)
         with _get_ad_client() as client:
             client.modify_raw_attribute(node_dn, 'dnsRecord', old_encoded, MODIFY_DELETE)
-            # CATATAN: kalau ini record TERAKHIR di node itu, entry dnsNode akan
-            # KOSONG (tanpa value dnsRecord apa pun) tapi TETAP ADA -- sengaja
-            # TIDAK auto-hapus node-nya (lebih aman, hindari hapus entry LDAP
-            # tanpa sengaja kalau ada atribut lain yg tidak kita ketahui masih dipakai).
 
         return Response({'success': True, 'message': 'Record berhasil dihapus.'}, status=status.HTTP_200_OK)

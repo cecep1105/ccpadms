@@ -67,12 +67,6 @@ class DnsRecord:
     raw_type: int | None = None  # tipe MENTAH (angka) -- diisi otomatis saat decode, dipakai kalau tipe TIDAK dikenal (belum didukung) supaya tetap bisa ditampilkan read-only
 
 
-# --- Encode nama DNS format DNS_COUNT_NAME (BUKAN format wire DNS biasa!) ---
-# Dipakai utk data record CNAME/NS/PTR/MX(target)/SRV(target) -- struktur:
-#   Offset 0: Length     (1 byte) -- total panjang RawName di bawah
-#   Offset 1: LabelCount (1 byte) -- jumlah label (mis. "www.example.com" = 3 label)
-#   Offset 2+: RawName   -- tiap label: [panjang label][isi label], diakhiri byte 0x00
-
 def _encode_dns_name(name: str) -> bytes:
     name = name.rstrip('.')
     labels = name.split('.') if name else []
@@ -83,7 +77,6 @@ def _encode_dns_name(name: str) -> bytes:
 
 
 def _decode_dns_name(buf: bytes, offset: int) -> tuple[str, int]:
-    """Return (nama_string, jumlah_byte_yg_dipakai) -- offset argumen = posisi mulai struktur DNS_COUNT_NAME di buf."""
     total_len = buf[offset]
     label_count = buf[offset + 1]
     raw = buf[offset + 2: offset + 2 + total_len]
@@ -95,8 +88,6 @@ def _decode_dns_name(buf: bytes, offset: int) -> tuple[str, int]:
         pos += 1 + label_len
     return '.'.join(labels), 2 + total_len
 
-
-# --- Encode/decode Data per tipe record ---
 
 def _encode_data(type_name: str, data: dict[str, Any]) -> bytes:
     if type_name == 'A':
@@ -122,8 +113,6 @@ def _encode_data(type_name: str, data: dict[str, Any]) -> bytes:
         )
 
     if type_name == 'TXT':
-        # DNS_COUNT_STRING: 1 byte panjang + isi string, per potongan (DNS TXT
-        # klasik batasi tiap potongan maks 255 byte -- potong otomatis kalau lebih panjang).
         text = data['text']
         chunks = [text[i:i + 255] for i in range(0, len(text), 255)] or ['']
         return b''.join(bytes([len(c.encode('utf-8'))]) + c.encode('utf-8') for c in chunks)
@@ -162,22 +151,19 @@ def _decode_data(type_name: str, raw_type: int, buf: bytes) -> dict[str, Any]:
             pos += 1 + chunk_len
         return {'text': ''.join(chunks)}
 
-    # Tipe TIDAK dikenal/belum didukung (mis. SOA) -- return mentah, FE tampilkan read-only.
     return {'raw_hex': buf.hex(), 'raw_type': raw_type}
 
-
-# --- Fungsi utama: encode/decode 1 record utuh (header 24 byte + data) ---
 
 def encode_record(record: DnsRecord) -> bytes:
     if record.type_name not in DNS_TYPE_BY_NAME:
         raise DnsCodecError(f"Tidak bisa encode tipe '{record.type_name}' -- tidak dikenal.")
     data_bytes = _encode_data(record.type_name, record.data)
     header = struct.pack(
-        '<HHBBHI',  # little-endian: wDataLength, wType, Version, Rank, Flags, dwSerial
+        '<HHBBHI',
         len(data_bytes), DNS_TYPE_BY_NAME[record.type_name], 5, 240, 0, record.serial,
     )
-    ttl = struct.pack('>I', record.ttl_seconds)  # BIG-ENDIAN -- lihat catatan di docstring modul
-    reserved_and_timestamp = struct.pack('<II', 0, 0)  # dwReserved=0, dwTimeStamp=0 (record statis)
+    ttl = struct.pack('>I', record.ttl_seconds)
+    reserved_and_timestamp = struct.pack('<II', 0, 0)
     return header + ttl + reserved_and_timestamp + data_bytes
 
 

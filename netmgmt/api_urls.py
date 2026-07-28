@@ -5,8 +5,11 @@ from .active_directory_view import (
     ADGroupListView,
     ADGroupMembersView,
     ADGroupMembershipView,
+    ADLockedUsersListView,
     ADResetPasswordView,
     ADUserListView,
+    ADUserToggleStatusView,
+    ADUserUnlockView,
 )
 from .routeros_api_view import RouterOSCommandView
 from .zentyal_view import (
@@ -29,6 +32,9 @@ urlpatterns = [
     path('ad/groups/<path:group_dn>/members/', ADGroupMembersView.as_view(), name='ad-group-members'),
     path('ad/group-membership/', ADGroupMembershipView.as_view(), name='ad-group-membership'),
     path('ad/reset-password/', ADResetPasswordView.as_view(), name='ad-reset-password'),
+    path('ad/users/toggle-status/', ADUserToggleStatusView.as_view(), name='ad-user-toggle-status'),
+    path('ad/users/locked/', ADLockedUsersListView.as_view(), name='ad-users-locked'),
+    path('ad/users/unlock/', ADUserUnlockView.as_view(), name='ad-user-unlock'),
 
     # --- Active Directory DNS -- lihat netmgmt/active_directory_dns_view.py ---
     path('ad/dns/zones/', ADDNSZoneListView.as_view(), name='ad-dns-zones'),
