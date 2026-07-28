@@ -452,4 +452,9 @@ LOGGING = {
     },
 }
 
-MIKROTIK_PASSWORD_ENCRYPTED=env('MIKROTIK_PASSWORD_ENCRYPTED',default='')
+# Kredensial Mikrotik (netmgmt) -- lihat netmgmt/crypto_utils.py.
+# MIKROTIK_ENCRYPTION_KEY SEBELUMNYA hilang dari sini sama sekali (bug --
+# netmgmt keliru pakai MCLOCK_ENCRYPTION_KEY lewat mclock/crypto_utils.py,
+# jadi key ini toh tidak pernah dibaca) -- sudah diperbaiki.
+MIKROTIK_ENCRYPTION_KEY = env('MIKROTIK_ENCRYPTION_KEY', default='')
+MIKROTIK_PASSWORD_ENCRYPTED = env('MIKROTIK_PASSWORD_ENCRYPTED', default='')

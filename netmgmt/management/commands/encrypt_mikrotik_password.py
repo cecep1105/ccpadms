@@ -1,7 +1,7 @@
 """
-Enkripsi password MSSQL untuk fitur Mobile Attendance, pakai
-MCLOCK_ENCRYPTION_KEY yang sudah di-generate (lihat `generate_mclock_key`).
-Hasilnya (string base64) disimpan di .env sebagai MCLOCK_MSSQL_PASSWORD_ENCRYPTED.
+Enkripsi password Mikrotik untuk fitur netmgmt, pakai
+MIKROTIK_ENCRYPTION_KEY yang sudah di-generate (lihat `generate_mikrotik_key`).
+Hasilnya (string base64) disimpan di .env sebagai MIKROTIK_PASSWORD_ENCRYPTED.
 
 Jalankan:
     python manage.py encrypt_mikrotik_password
@@ -10,23 +10,24 @@ import getpass
 
 from django.core.management.base import BaseCommand
 
-from mclock.crypto_utils import MclockCryptoError, encrypt_password
+from netmgmt.crypto_utils import NetmgmtCryptoError, encrypt_mikrotik_password
 
 
 class Command(BaseCommand):
     help = (
-        'MIKROTIK_PASSWORD_ENCRYPTED). Perlu MIKROTIK_ENCRYPTION_KEY sudah diisi lebih dulu.'
+        'Enkripsi password Mikrotik (hasil disimpan sbg MIKROTIK_PASSWORD_ENCRYPTED). '
+        'Perlu MIKROTIK_ENCRYPTION_KEY sudah diisi lebih dulu (lihat generate_mikrotik_key).'
     )
 
     def handle(self, *args, **options):
-        password = getpass.getpass('Masukkan password MIKROTIK (tidak akan tampil di layar): ')
+        password = getpass.getpass('Masukkan password Mikrotik (tidak akan tampil di layar): ')
         if not password:
             self.stdout.write(self.style.ERROR('Password tidak boleh kosong.'))
             return
 
         try:
-            encrypted = encrypt_password(password)
-        except MclockCryptoError as exc:
+            encrypted = encrypt_mikrotik_password(password)
+        except NetmgmtCryptoError as exc:
             self.stdout.write(self.style.ERROR(str(exc)))
             return
 

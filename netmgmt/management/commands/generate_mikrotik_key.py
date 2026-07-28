@@ -1,6 +1,8 @@
 """
-Generate encryption key (Fernet) untuk fitur NETMON -- dijalankan
-SEKALI di awal setup, hasilnya disimpan di .env sebagai MIKROTIK_ENCRYPTION_KEY.
+Generate encryption key (Fernet) KHUSUS kredensial Mikrotik (netmgmt) --
+dijalankan SEKALI di awal setup, hasilnya disimpan di .env sebagai
+MIKROTIK_ENCRYPTION_KEY (BUKAN MCLOCK_ENCRYPTION_KEY -- itu punya fitur
+MSSQL/Mobile Attendance, key TERPISAH, jangan tertukar).
 
 Jalankan:
     python manage.py generate_mikrotik_key
@@ -10,7 +12,7 @@ from django.core.management.base import BaseCommand
 
 
 class Command(BaseCommand):
-    help = 'Generate encryption key (Fernet) baru untuk enkripsi password MIKROTIK.'
+    help = 'Generate encryption key (Fernet) baru untuk enkripsi password Mikrotik (netmgmt).'
 
     def handle(self, *args, **options):
         key = Fernet.generate_key().decode()
@@ -22,6 +24,6 @@ class Command(BaseCommand):
         self.stdout.write(self.style.WARNING(
             'PENTING: simpan key ini baik-baik & JANGAN sampai hilang/berubah -- password yang sudah '
             'dienkripsi pakai key ini tidak akan bisa didekripsi lagi kalau key-nya beda. Setelah '
-            'key ini disimpan di .env, jalankan "python manage.py encrypt_mIKROTIK_password" untuk '
-            'enkripsi password MSSQL Anda.'
+            'key ini disimpan di .env, jalankan "python manage.py encrypt_mikrotik_password" untuk '
+            'enkripsi password Mikrotik Anda.'
         ))

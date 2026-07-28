@@ -1,148 +1,176 @@
-import routeros_api
+"""
+Proxy generik ke RouterOS API (Mikrotik) -- SATU endpoint yang bisa
+menjalankan HAMPIR SEMUA command RouterOS (baca/tulis), lewat parameter
+URL `host` (IP/hostname router) & `command` (path RouterOS, format URL-safe).
 
+KENAPA DESAINNYA BEGINI (generik, bukan 1 endpoint per resource spt
+Employee/Department dkk): RouterOS API punya BANYAK SEKALI "resource"
+(DHCP lease, firewall filter, netwatch, dst, puluhan lainnya) -- bikin 1
+ViewSet Django per resource spt pola CRUD biasa di app lain TIDAK PRAKTIS
+(perlu puluhan file/URL). Endpoint generik ini CUKUP 1 kali dibuat,
+dipakai ULANG oleh SEMUA halaman Mikrotik di frontend (DHCP, Firewall
+Filter, Netwatch, dst) cuma beda `command`-nya.
+
+KONVENSI PENULISAN COMMAND (di URL, lihat contoh di frontend
+nextadms/src/app/(dashboard)/netmgmt/mikrotik/*/page.tsx):
+    ip-dhcp_server-lease   ->  /ip/dhcp-server/lease   (RouterOS asli)
+    system-resource        ->  /system/resource
+Aturan konversi (lihat _format_command() di bawah):  "_" -> "-",  "-" -> "/"
+(urutan PENTING -- dash asli RouterOS, mis. "dhcp-server", HARUS
+diwakili underscore "_" di URL, supaya tidak ketuker sama separator "/").
+
+PENTING -- KENAPA PAGINATION/SORT/SEARCH BEDA POLA dari tabel Django
+biasa (yg pakai Django REST Framework OrderingFilter/PageNumberPagination,
+query param `?page=`/`?ordering=`/`?q=`): data di sini TIDAK ADA di
+database Django SAMA SEKALI -- diambil LANGSUNG dari router lewat API
+tiap request, RouterOS API sendiri TIDAK PUNYA konsep pagination/sorting
+server-side spt DRF. Jadi pagination/sort/search di endpoint ini
+dikerjakan MANUAL di Python SETELAH data mentah didapat dari router
+(baca SEMUA baris resource itu, baru potong/sortir/filter di memori) --
+utk resource yang jumlah barisnya WAJAR (puluhan-ratusan, spt DHCP
+lease/firewall rules) ini cukup cepat, TAPI TIDAK COCOK kalau nanti
+dipakai ke resource dgn ribuan+ baris (pertimbangkan cache/limit kalau
+ketemu kasus itu).
+
+Parameter kontrol (prefix underscore, BEDA dari param Django biasa
+supaya jelas ini bukan filter Django spt biasa):
+    _page, _limit           : pagination (BUKAN `page`/`page_size`)
+    _sort_by, _order         : sorting, _order = "asc"|"desc" (BUKAN `ordering=-field`)
+    _q, _search_fields       : pencarian teks bebas di field yg disebutkan (BUKAN `q`)
+"""
+import re
+
+import routeros_api
+from django.conf import settings
+from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework import filters, status, viewsets
+
 from api.permissions import IsStaffRole
+from netmgmt.crypto_utils import NetmgmtCryptoError, decrypt_mikrotik_password
 
-from mclock.crypto_utils import MclockCryptoError, decrypt_password
-from django.conf import settings
+# Semua parameter KONTROL (bukan argumen asli command RouterOS) --
+# WAJIB di-strip dari params sebelum diteruskan ke `.get(**params)`,
+# supaya RouterOS tidak terima parameter aneh yang tidak dia kenal.
+# SEBELUMNYA ini pola REGEX PREFIX (`^_sortby` tanpa underscore) yang
+# TIDAK COCOK dgn param asli `_sort_by` (DENGAN underscore) -- jadi
+# `_sort_by` & `_search_fields` BOCOR ke request RouterOS asli tanpa
+# sengaja. Sekarang pakai SET EXPLISIT, lebih jelas & tidak salah lagi.
+_CONTROL_PARAMS = {'_page', '_limit', '_sort_by', '_order', '_q', '_search_fields'}
 
 
-class MIKROTIKConnectionError(Exception):
-    """Gagal terhubung ke MIKROTIK."""
+def _format_command(command: str) -> str:
+    """'ip-dhcp_server-lease' -> '/ip/dhcp-server/lease' (lihat konvensi di docstring modul)."""
+    mapping = {'_': '-', '-': '/'}
+    pattern = re.compile('|'.join(re.escape(k) for k in mapping))
+    return '/' + pattern.sub(lambda m: mapping[m.group(0)], command)
+
+
+class MikrotikConnectionError(Exception):
+    """Gagal terhubung/autentikasi ke router Mikrotik."""
+
 
 class RouterOSCommandView(APIView):
+    """
+    GET  /api/v1/netmgmt/routeros/<host>/<command>/?_page=&_limit=&_sort_by=&_order=&_q=&_search_fields=
+        -> baca resource (mis. daftar DHCP lease), dgn pagination/sort/search MANUAL (lihat docstring modul).
+    POST /api/v1/netmgmt/routeros/<host>/<command>/?postcmd=<nama-command-RouterOS, mis. 'remove'/'make-static'>
+        -> eksekusi command TULIS (body JSON diteruskan sbg argumen ke command itu, mis. {"id": ".id123"}).
+    """
     permission_classes = [IsAuthenticated, IsStaffRole]
-
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.username = 'admin'
+        self.username = 'admin'  # TODO kalau nanti router-nya bukan cuma 1 & usernamenya beda2, jadikan ini bagian dari config per-router (lihat catatan "beberapa penambahan" -- multi-router support)
         self.port = 8728
         self.connection = None
         self.api = None
-        password = settings.MIKROTIK_PASSWORD_ENCRYPTED
 
-        if not password:
-            raise MIKROTIKConnectionError(
-                'Password MIKROTIK belum diisi (MIKROTIK_PASSWORD_ENCRYPTED di .env).'
+        if not settings.MIKROTIK_PASSWORD_ENCRYPTED:
+            raise MikrotikConnectionError(
+                'Password Mikrotik belum diisi (MIKROTIK_PASSWORD_ENCRYPTED di .env) -- lihat '
+                'netmgmt/crypto_utils.py & management command generate_mikrotik_key/encrypt_mikrotik_password.'
             )
-
         try:
-            self.password = decrypt_password(settings.MIKROTIK_PASSWORD_ENCRYPTED)
-        except MclockCryptoError as exc:
-            raise MIKROTIKConnectionError(str(exc)) from exc
+            self.password = decrypt_mikrotik_password(settings.MIKROTIK_PASSWORD_ENCRYPTED)
+        except NetmgmtCryptoError as exc:
+            raise MikrotikConnectionError(str(exc)) from exc
 
     def initial(self, request, *args, **kwargs):
-        """Connect to MikroTik before processing the request."""
+        """Konek ke router SEBELUM get()/post() diproses -- host diambil dari URL (lihat api_urls.py)."""
         super().initial(request, *args, **kwargs)
-
         host = kwargs.get('host')
-        self.api = None
-
         try:
             self.connection = routeros_api.RouterOsApiPool(
-                host, username=self.username, password=self.password, 
-                port=self.port, plaintext_login=True
+                host, username=self.username, password=self.password,
+                port=self.port, plaintext_login=True,
             )
             self.api = self.connection.get_api()
-        except Exception as e:
-            raise Exception(f"Failed to connect to RouterOS: {str(e)}")
+        except Exception as exc:  # noqa: BLE001 -- library routeros_api bisa lempar berbagai exception, semua diperlakukan sama (gagal konek)
+            raise MikrotikConnectionError(f"Gagal terhubung ke router '{host}': {exc}") from exc
 
     def finalize_response(self, request, response, *args, **kwargs):
-        """Ensure the connection closes after response is sent."""
+        """Tutup koneksi ke router SETELAH response selesai dibentuk -- jangan biarkan koneksi menggantung."""
         if self.connection:
             self.connection.disconnect()
         return super().finalize_response(request, response, *args, **kwargs)
 
     def get(self, request, host=None, command=None, format=None):
-        """Execute dynamically supplied RouterOS command."""
-        import re
+        if not command:
+            return Response({'error': 'Command wajib diisi.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 1. Make a mutable copy of request.GET
-        params = request.GET.copy()
-
-        # 2. Define your regex pattern for keys to remove
-        pattern = re.compile(r"^_page|^_limit|^_order|^_sortby|^_q")
-
-        # 3. Find and delete keys matching the regex
-        for key in list(params.keys()):
-            if pattern.match(key):
-                del params[key]
+        # Parameter APA ADANYA dari client, MINUS parameter kontrol (lihat _CONTROL_PARAMS) --
+        # sisanya (kalau ada) diteruskan APA ADANYA ke RouterOS .get() sbg filter tambahan.
+        extra_params = {k: v for k, v in request.GET.items() if k not in _CONTROL_PARAMS}
 
         page = int(request.query_params.get('_page', 1))
         limit = int(request.query_params.get('_limit', 10))
-        sort_by = request.query_params.get('_sort_by', 'id').replace("_", "-")
+        # RouterOS pakai dash ("mac-address"), tapi URL/JS kadang lebih nyaman underscore --
+        # terima KEDUANYA, konversi underscore->dash supaya field-nya cocok dgn key asli hasil RouterOS.
+        sort_by = request.query_params.get('_sort_by', 'id').replace('_', '-')
         order = request.query_params.get('_order', 'asc')
-        search_query = request.GET.get('_q', '').lower()
+        search_query = request.query_params.get('_q', '').strip().lower()
+        search_fields = [f.strip() for f in request.query_params.get('_search_fields', '').split(',') if f.strip()]
 
-        search_fields = [
-            field.strip()
-            for field in request.GET.get("_search_fields", "").split(",")
-            if field.strip()
-        ]
-
-        if not command:
-            return Response({"error": "Command is required"}, status=status.HTTP_400_BAD_REQUEST)
-
+        formatted_cmd = _format_command(command)
         try:
-            # Replaces URL dash-syntax with slash-syntax for ROS, e.g., 'system-resource' -> '/system/resource'
-            # 'ip-dhcp_server-lease' -> '/ip/dhcp-server/lease'
-            mapping = {"_": "-", "-": "/"}
-            pattern = re.compile("|".join(re.escape(key) for key in mapping.keys()))
-            fcmd = pattern.sub(lambda match: mapping[match.group(0)], command)
-            formatted_cmd = '/' + fcmd
-            result = self.api.get_resource(formatted_cmd).get(**params.dict())
+            result = self.api.get_resource(formatted_cmd).get(**extra_params)
+        except Exception as exc:  # noqa: BLE001
+            return Response({'error': f'Gagal membaca dari router: {exc}'}, status=status.HTTP_502_BAD_GATEWAY)
 
-            if search_query and search_fields:
-                result = [
-                    item for item in result
-                    if any(
-                        search_query in str(item.get(field, "")).lower()
-                        for field in search_fields
-                    )
-                ]
+        if search_query and search_fields:
+            result = [
+                item for item in result
+                if any(search_query in str(item.get(field, '')).lower() for field in search_fields)
+            ]
 
-            # 4. Sort Python list (handling strings)
-            reverse = True if order == 'desc' else False
-            result.sort(key=lambda x: x.get(sort_by, ''), reverse=reverse)
+        # Sort & paginate DI PYTHON (bukan di router) -- lihat penjelasan lengkap di docstring modul.
+        result.sort(key=lambda item: item.get(sort_by, ''), reverse=(order == 'desc'))
+        start = (page - 1) * limit
+        paginated = result[start:start + limit]
 
-            # 5. Paginate
-            start = (page - 1) * limit
-            end = start + limit
-            paginated_data = result[start:end]
-            return Response({
-                "command": formatted_cmd,
-                "count": len(result),
-                "page": page,
-                "results": paginated_data,
-                "next": page + 1 if end < len(result) else None,
-                "previous": page - 1 if page > 1 else None,
+        return Response({
+            'command': formatted_cmd,
+            'count': len(result),
+            'page': page,
+            'results': paginated,
+            'next': page + 1 if start + limit < len(result) else None,
+            'previous': page - 1 if page > 1 else None,
+        }, status=status.HTTP_200_OK)
 
-            }, status=status.HTTP_200_OK)
-
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-    def post(self,request,host=None,command=None,format=None):
-        """Execute dynamically supplied RouterOS command."""
-        import re
+    def post(self, request, host=None, command=None, format=None):
+        """Eksekusi command TULIS RouterOS, mis. ?postcmd=remove utk hapus 1 lease (body: {"id": ".id..."})."""
         if not command:
-            return Response({"error": "Command is required"}, status=status.HTTP_400_BAD_REQUEST)
-        try:
-            # Replaces URL dash-syntax with slash-syntax for ROS, e.g., 'system-resource' -> '/system/resource'
-            # 'ip-dhcp_server-lease' -> '/ip/dhcp-server/lease'
-            postcmd = request.GET.get('postcmd','')
-            mapping = {"_": "-", "-": "/"}
-            pattern = re.compile("|".join(re.escape(key) for key in mapping.keys()))
-            fcmd = pattern.sub(lambda match: mapping[match.group(0)], command)
-            formatted_cmd = '/' + fcmd
+            return Response({'error': 'Command wajib diisi.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        postcmd = request.query_params.get('postcmd', '')
+        if not postcmd:
+            return Response({'error': "Parameter '?postcmd=' wajib diisi utk POST (mis. 'remove', 'make-static')."}, status=status.HTTP_400_BAD_REQUEST)
+
+        formatted_cmd = _format_command(command)
+        try:
             result = self.api.get_resource(formatted_cmd).call(postcmd, request.data)
-
-            return Response({"command": formatted_cmd, "results": result}, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+            return Response({'command': formatted_cmd, 'results': result}, status=status.HTTP_200_OK)
+        except Exception as exc:  # noqa: BLE001
+            return Response({'error': f"Gagal eksekusi '{postcmd}' di router: {exc}"}, status=status.HTTP_502_BAD_GATEWAY)
