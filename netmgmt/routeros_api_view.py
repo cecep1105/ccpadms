@@ -84,8 +84,6 @@ class RouterOSCommandView(APIView):
             if field.strip()
         ]
 
-       
-
         if not command:
             return Response({"error": "Command is required"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -124,7 +122,6 @@ class RouterOSCommandView(APIView):
                 "previous": page - 1 if page > 1 else None,
 
             }, status=status.HTTP_200_OK)
-
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -85,7 +85,7 @@ INSTALLED_APPS = [
     'iclock',
     'mclock',
     'mattendance',
-    'netmon'
+    'netmgmt'
 ]
 
 MIDDLEWARE = [
@@ -451,3 +451,5 @@ LOGGING = {
         'mclock': {'handlers': ['console'], 'level': 'DEBUG' if DEBUG else 'INFO', 'propagate': False},
     },
 }
+
+MIKROTIK_PASSWORD_ENCRYPTED=env('MIKROTIK_PASSWORD_ENCRYPTED',default='')
