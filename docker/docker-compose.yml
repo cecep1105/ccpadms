@@ -83,7 +83,20 @@ services:
         MCLOCK_MSSQL_USERNAME: ${MCLOCK_MSSQL_USERNAME:-}
         MCLOCK_MSSQL_PASSWORD_ENCRYPTED: ${MCLOCK_MSSQL_PASSWORD_ENCRYPTED:-}
         MCLOCK_MSSQL_TDS_VERSION: ${MCLOCK_MSSQL_TDS_VERSION:-7.0}
-        ICLOCK_LEGACY_DBCRED: ${ICLOCK_LEGACY_DBCRED:-}        
+        ICLOCK_LEGACY_DBCRED: ${ICLOCK_LEGACY_DBCRED:-}  
+        MIKROTIK_ENCRYPTION_KEY: ${MIKROTIK_ENCRYPTION_KEY:-}
+        MIKROTIK_PASSWORD_ENCRYPTED: ${MIKROTIK_PASSWORD_ENCRYPTED:-}
+        AD_ENCRYPTION_KEY: ${AD_ENCRYPTION_KEY:-}
+        AD_SERVER_URI: ${AD_SERVER_URI:-}
+        AD_BIND_DN: ${AD_BIND_DN:-}  # mis. 'CN=svc-netmgmt,CN=Users,DC=contoso,DC=com'
+        AD_BIND_PASSWORD_ENCRYPTED: ${AD_BIND_PASSWORD_ENCRYPTED:-}
+        AD_BASE_DN: ${AD_BASE_DN:-}  # mis. 'DC=contoso,DC=com'
+        AD_USER_BASE_DN: ${AD_USER_BASE_DN:-}
+        AD_GROUP_BASE_DN: ${AD_GROUP_BASE_DN:-}
+        AD_USE_SSL: ${AD_USE_SSL: -false)
+        AD_CONNECT_TIMEOUT: ${AD_CONNECT_TIMEOUT: -5)
+        AD_MAX_FETCH_ROWS: ${AD_MAX_FETCH_ROWS: -5000)
+
       RUN_MIGRATIONS: "true"  # HANYA service ini yang migrate/collectstatic, lihat entrypoint.sh
     extra_hosts:
       # If using Option A (Entire mapping string):
