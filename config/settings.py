@@ -452,9 +452,28 @@ LOGGING = {
     },
 }
 
-# Kredensial Mikrotik (netmgmt) -- lihat netmgmt/crypto_utils.py.
-# MIKROTIK_ENCRYPTION_KEY SEBELUMNYA hilang dari sini sama sekali (bug --
-# netmgmt keliru pakai MCLOCK_ENCRYPTION_KEY lewat mclock/crypto_utils.py,
-# jadi key ini toh tidak pernah dibaca) -- sudah diperbaiki.
+# --- Kredensial Mikrotik (netmgmt) -- lihat netmgmt/crypto_utils.py ---
 MIKROTIK_ENCRYPTION_KEY = env('MIKROTIK_ENCRYPTION_KEY', default='')
 MIKROTIK_PASSWORD_ENCRYPTED = env('MIKROTIK_PASSWORD_ENCRYPTED', default='')
+
+# --- Koneksi Active Directory (netmgmt) -- TERPISAH dari AUTH_LDAP_* di
+# atas (itu KHUSUS login staff, service account-nya BISA SAJA beda hak
+# akses -- AD di sini perlu hak BACA users/groups DAN TULIS (ubah member
+# group), biasanya butuh account service dgn privilege lebih tinggi). ---
+AD_ENCRYPTION_KEY = env('AD_ENCRYPTION_KEY', default='')
+AD_SERVER_URI = env('AD_SERVER_URI', default='')
+AD_BIND_DN = env('AD_BIND_DN', default='')  # mis. 'CN=svc-netmgmt,CN=Users,DC=contoso,DC=com'
+AD_BIND_PASSWORD_ENCRYPTED = env('AD_BIND_PASSWORD_ENCRYPTED', default='')
+AD_BASE_DN = env('AD_BASE_DN', default='')  # mis. 'DC=contoso,DC=com'
+# Override opsional kalau users/groups ada di sub-OU BEDA dari AD_BASE_DN --
+# kalau kosong, AD_BASE_DN dipakai utk keduanya.
+AD_USER_BASE_DN = env('AD_USER_BASE_DN', default='') or AD_BASE_DN
+AD_GROUP_BASE_DN = env('AD_GROUP_BASE_DN', default='') or AD_BASE_DN
+AD_USE_SSL = env.bool('AD_USE_SSL', default=False)
+AD_CONNECT_TIMEOUT = env.int('AD_CONNECT_TIMEOUT', default=5)
+# Batas jumlah baris diambil per fetch dari AD -- proteksi supaya query
+# "list semua user" di direktori BESAR (ribuan+) tidak bikin request lambat
+# tak terbatas. Pagination TETAP jalan normal di bawah batas ini (lihat
+# netmgmt/list_utils.py) -- kalau direktori Anda LEBIH BESAR dari ini &
+# perlu akses baris di luar batas, naikkan nilainya.
+AD_MAX_FETCH_ROWS = env.int('AD_MAX_FETCH_ROWS', default=5000)

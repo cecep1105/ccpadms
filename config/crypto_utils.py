@@ -4,13 +4,6 @@ perlu simpan kredensial terenkripsi di .env/settings (MSSQL mclock,
 Mikrotik netmgmt, Active Directory, Zentyal LDAP, dst) -- pakai
 `cryptography.fernet.Fernet` (symmetric encryption).
 
-DIBUAT (sesi ini) krn ditemukan BUG NYATA di netmgmt: perintah
-`generate_mikrotik_key` menginstruksikan simpan key sbg
-MIKROTIK_ENCRYPTION_KEY, TAPI kode enkripsinya (mclock/crypto_utils.py
-versi lama) HARDCODE baca MCLOCK_ENCRYPTION_KEY -- key yang baru dibuat
-itu TIDAK PERNAH benar-benar terpakai, password Mikrotik diam-diam
-terenkripsi pakai key MSSQL (kalau ada) atau gagal total (kalau tidak).
-
 Modul ini PARAMETERIZED (nama settings key dikirim sbg argumen), supaya
 SETIAP fitur bisa punya key ENKRIPSI SENDIRI (praktik keamanan yang baik
 -- kompromi 1 key tidak otomatis bongkar kredensial fitur lain). Fitur
@@ -20,12 +13,9 @@ site yang sudah ada) -- fitur BARU (netmgmt Mikrotik/AD/Zentyal) pakai
 modul ini langsung dgn nama key masing-masing.
 
 Alur pemakaian (generik, GANTI <NAMA> sesuai fitur):
-1. Generate key sekali, simpan di .env sbg <NAMA>_ENCRYPTION_KEY:
-       python manage.py generate_mikrotik_key   # atau generate_mclock_key, dst
-2. Enkripsi password pakai key itu:
-       python manage.py encrypt_mikrotik_password
-   -> hasilnya (string base64) disimpan di .env sbg
-      <NAMA>_PASSWORD_ENCRYPTED (mis. MIKROTIK_PASSWORD_ENCRYPTED).
+1. Generate key sekali, simpan di .env sbg <NAMA>_ENCRYPTION_KEY.
+2. Enkripsi password pakai key itu -> hasilnya (string base64) disimpan
+   di .env sbg <NAMA>_PASSWORD_ENCRYPTED.
 3. Saat runtime, decrypt_password() dipanggil HANYA pas benar-benar mau
    konek -- password plaintext TIDAK PERNAH disimpan di database/file/log
    mana pun, cuma ada sesaat di memori selama proses koneksi berlangsung.
