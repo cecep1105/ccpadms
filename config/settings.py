@@ -465,6 +465,12 @@ AD_SERVER_URI = env('AD_SERVER_URI', default='')
 AD_BIND_DN = env('AD_BIND_DN', default='')  # mis. 'CN=svc-netmgmt,CN=Users,DC=contoso,DC=com'
 AD_BIND_PASSWORD_ENCRYPTED = env('AD_BIND_PASSWORD_ENCRYPTED', default='')
 AD_BASE_DN = env('AD_BASE_DN', default='')  # mis. 'DC=contoso,DC=com'
+# DN root FOREST -- BEDA dari AD_BASE_DN kalau domain Anda adalah CHILD
+# domain di forest multi-domain (mis. AD_BASE_DN='DC=jakarta,DC=contoso,DC=com'
+# tapi forest root-nya 'DC=contoso,DC=com') -- dipakai cari zone DNS
+# "ForestDnsZones" (lihat netmgmt/active_directory_dns_view.py). Default
+# SAMA DENGAN AD_BASE_DN (asumsi single-domain-forest, paling umum).
+AD_FOREST_BASE_DN = env('AD_FOREST_BASE_DN', default='') or AD_BASE_DN
 # Override opsional kalau users/groups ada di sub-OU BEDA dari AD_BASE_DN --
 # kalau kosong, AD_BASE_DN dipakai utk keduanya.
 AD_USER_BASE_DN = env('AD_USER_BASE_DN', default='') or AD_BASE_DN
