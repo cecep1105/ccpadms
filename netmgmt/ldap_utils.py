@@ -86,12 +86,30 @@ class LDAPManagementClient:
             raise LDAPManagementError(f'Pencarian LDAP gagal: {exc}') from exc
 
     def add_member(self, group_dn: str, member_dn: str) -> None:
-        """Tambah 1 DN (user) ke atribut `member` sebuah group (skema AD/groupOfNames -- lihat catatan Zentyal kalau skemanya beda)."""
+        """Tambah 1 DN (user) ke atribut `member` sebuah group (skema AD/groupOfNames/zentyalDistributionGroup)."""
         self._modify_member(group_dn, member_dn, MODIFY_ADD)
 
     def remove_member(self, group_dn: str, member_dn: str) -> None:
         """Hapus 1 DN (user) dari atribut `member` sebuah group."""
         self._modify_member(group_dn, member_dn, MODIFY_DELETE)
+
+    def modify_member_uid(self, group_dn: str, uid: str, *, add: bool) -> None:
+        """
+        Tambah/hapus 1 UID (string, BUKAN DN) ke/dari atribut `memberUid`
+        sebuah group -- skema POSIX klasik (rfc2307/posixGroup), dipakai
+        Zentyal LDAP (lihat netmgmt/zentyal_view.py) -- BEDA dari
+        add_member()/remove_member() di atas yang urus atribut `member`
+        (isinya FULL DN, dipakai AD/groupOfNames).
+        """
+        if not self._connection:
+            raise LDAPManagementError('Koneksi belum dibuka -- pakai dgn `with LDAPManagementClient(...) as client:`.')
+        operation = MODIFY_ADD if add else MODIFY_DELETE
+        try:
+            ok = self._connection.modify(group_dn, {'memberUid': [(operation, [uid])]})
+            if not ok:
+                raise LDAPManagementError(f'Modify group (memberUid) gagal: {self._connection.result}')
+        except LDAPException as exc:
+            raise LDAPManagementError(f'Modify group (memberUid) gagal: {exc}') from exc
 
     def _modify_member(self, group_dn: str, member_dn: str, operation) -> None:
         if not self._connection:
