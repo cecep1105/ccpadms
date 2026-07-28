@@ -96,6 +96,12 @@ services:
         AD_USE_SSL: ${AD_USE_SSL: -false)
         AD_CONNECT_TIMEOUT: ${AD_CONNECT_TIMEOUT: -5)
         AD_MAX_FETCH_ROWS: ${AD_MAX_FETCH_ROWS: -5000)
+        ZENTYAL_SERVER_URI: ${ZENTYAL_SERVER_URI: -}
+        ZENTYAL_BIND_DN: ${ZENTYAL_BIND_DN: -}
+        ZENTYAL_ENCRYPTION_KEY: ${ZENTYAL_ENCRYPTION_KEY: -}
+        ZENTYAL_BIND_PASSWORD_ENCRYPTED: ${ZENTYAL_BIND_PASSWORD_ENCRYPTED: -}
+        ZENTYAL_BASE_DN: ${ZENTYAL_BASE_DN: -}
+        ZENTYAL_USE_SSL: $ZENTYAL_USE_SSL: -false}
 
       RUN_MIGRATIONS: "true"  # HANYA service ini yang migrate/collectstatic, lihat entrypoint.sh
     extra_hosts:
