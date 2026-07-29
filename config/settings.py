@@ -471,6 +471,28 @@ LOGGING = {
 MIKROTIK_ENCRYPTION_KEY = env('MIKROTIK_ENCRYPTION_KEY', default='')
 MIKROTIK_PASSWORD_ENCRYPTED = env('MIKROTIK_PASSWORD_ENCRYPTED', default='')
 
+# --- Webhook Netwatch (dipanggil LANGSUNG oleh script RouterOS saat status
+# up/down berubah, lihat test/netwatchscript.txt & netmgmt/routeros_netwatch_webhook_view.py)
+# -- BEDA dari endpoint netmgmt lain (yang dipanggil user login lewat
+# Next.js), endpoint ini dipanggil MIKROTIK SENDIRI (`/tool fetch`), TIDAK
+# via session/JWT biasa.
+#
+# MIKROTIK_NETWATCH_ROUTER_IP: router yang di-QUERY BALIK utk ambil daftar
+# LENGKAP netwatch tiap kali webhook masuk (payload dari Mikrotik cuma
+# berisi 1 host yg berubah statusnya, TAPI broadcast WebSocket ke frontend
+# butuh DAFTAR LENGKAP -- lihat docstring view). SAMA persis dgn env var
+# yang dipakai Next.js (nextadms .env: MIKROTIK_NETWATCH_ROUTER_IP) --
+# WAJIB nilainya SAMA (router yang sama), krn keduanya rujuk router fisik
+# yang sama, cuma beda proses (Django vs Next.js) yang membacanya.
+MIKROTIK_NETWATCH_ROUTER_IP = env('MIKROTIK_NETWATCH_ROUTER_IP', default='10.100.202.1')
+# Token OPSIONAL (query string ?token=...) -- endpoint /nwupdate TIDAK
+# PAKAI autentikasi Django biasa (session/JWT) krn dipanggil Mikrotik
+# langsung, bukan browser. Kalau env var ini KOSONG, endpoint TERBUKA
+# TANPA proteksi (cukup utk testing/LAN tertutup, TAPI sebaiknya diisi
+# utk produksi) -- isi token acak & tambahkan ke URL script Mikrotik:
+# url="http://$ADMSHOST:8000/api/v1/netmgmt/nwupdate?token=xxx"
+NETWATCH_WEBHOOK_TOKEN = env('NETWATCH_WEBHOOK_TOKEN', default='')
+
 # --- Koneksi Active Directory (netmgmt) -- TERPISAH dari AUTH_LDAP_* di
 # atas (itu KHUSUS login staff, service account-nya BISA SAJA beda hak
 # akses -- AD di sini perlu hak BACA users/groups DAN TULIS (ubah member

@@ -13,6 +13,7 @@ from .active_directory_view import (
 )
 from .routeros_api_view import RouterOSCommandView
 from .routeros_firewall_view import FirewallGrantAccessView
+from .routeros_netwatch_webhook_view import NetwatchWebhookView
 from .zentyal_mail_view import (
     ZentyalMailBlockSendersView,
     ZentyalMailControlView,
@@ -37,6 +38,17 @@ from .zentyal_view import (
 app_name = 'netmgmt_api'
 
 urlpatterns = [
+    # --- Webhook Netwatch (dipanggil LANGSUNG oleh script RouterOS, BUKAN
+    # user login -- lihat netmgmt/routeros_netwatch_webhook_view.py &
+    # test/netwatchscript.txt). TANPA trailing slash SENGAJA disamakan
+    # persis dgn URL di script Mikrotik (APPEND_SLASH Django bisa bikin
+    # redirect 301 utk POST tanpa slash yg BERISIKO kehilangan body di
+    # sebagian HTTP client -- termasuk kemungkinan `/tool fetch` RouterOS,
+    # jadi disediakan KEDUA varian, dgn & tanpa slash, biar aman apa pun
+    # persis URL yg dipakai script Anda).
+    path('nwupdate', NetwatchWebhookView.as_view(), name='netwatch-webhook'),
+    path('nwupdate/', NetwatchWebhookView.as_view(), name='netwatch-webhook-slash'),
+
     # --- Mikrotik (RouterOS) -- lihat netmgmt/routeros_api_view.py ---
     # PENTING: 'firewall/grant-access/' WAJIB didaftarkan SEBELUM route
     # generik di bawahnya -- route generik pakai <path:command> yang
