@@ -30,9 +30,11 @@ testing/LAN tertutup, tapi SEBAIKNYA diisi utk produksi.
 import logging
 
 from django.conf import settings
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+from api.permissions import IsStaffRole
 
 from iclock.ws_utils import wsinfo
 from netmgmt.routeros_api_view import MikrotikConnectionError, get_routeros_connection
@@ -91,3 +93,38 @@ class NetwatchWebhookView(APIView):
         logger.info('Netwatch webhook: broadcast %d entry netwatch ke group netmgmt.', len(rows))
 
         return Response({'success': True, 'count': len(rows)}, status=200)
+
+
+class NetwatchSummaryView(APIView):
+    """
+    GET /api/v1/netmgmt/netwatch-summary/ -- {"total_count": N, "down_count": M}
+
+    Dipakai indikator GLOBAL di Topbar (jumlah host down, lihat
+    src/components/layout/global-netmgmt-indicators.tsx) utk NILAI AWAL
+    saat halaman pertama dibuka (SEBELUM broadcast WebSocket pertama
+    masuk) -- update SELANJUTNYA murni lewat WebSocket (section=
+    'netwatch', TIDAK panggil endpoint ini lagi berulang).
+
+    PAKAI AUTENTIKASI Django BIASA (IsAuthenticated+IsStaffRole) -- BEDA
+    dari NetwatchWebhookView (itu dipanggil Mikrotik langsung, endpoint
+    INI dipanggil browser staff yg sudah login, sama spt endpoint netmgmt
+    lain.
+    """
+    permission_classes = [IsAuthenticated, IsStaffRole]
+
+    def get(self, request):
+        try:
+            connection, api = get_routeros_connection(settings.MIKROTIK_NETWATCH_ROUTER_IP)
+        except MikrotikConnectionError as exc:
+            return Response({'error': str(exc)}, status=502)
+
+        try:
+            try:
+                rows = api.get_resource('/tool/netwatch').get()
+            except Exception as exc:  # noqa: BLE001
+                return Response({'error': f'Gagal membaca netwatch dari router: {exc}'}, status=502)
+        finally:
+            connection.disconnect()
+
+        down_count = sum(1 for r in rows if r.get('status') == 'down')
+        return Response({'total_count': len(rows), 'down_count': down_count}, status=200)

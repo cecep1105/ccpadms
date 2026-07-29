@@ -13,7 +13,7 @@ from .active_directory_view import (
 )
 from .routeros_api_view import RouterOSCommandView
 from .routeros_firewall_view import FirewallGrantAccessView
-from .routeros_netwatch_webhook_view import NetwatchWebhookView
+from .routeros_netwatch_webhook_view import NetwatchSummaryView, NetwatchWebhookView
 from .zentyal_mail_view import (
     ZentyalMailBlockSendersView,
     ZentyalMailControlView,
@@ -48,6 +48,7 @@ urlpatterns = [
     # persis URL yg dipakai script Anda).
     path('nwupdate', NetwatchWebhookView.as_view(), name='netwatch-webhook'),
     path('nwupdate/', NetwatchWebhookView.as_view(), name='netwatch-webhook-slash'),
+    path('netwatch-summary/', NetwatchSummaryView.as_view(), name='netwatch-summary'),
 
     # --- Mikrotik (RouterOS) -- lihat netmgmt/routeros_api_view.py ---
     # PENTING: 'firewall/grant-access/' WAJIB didaftarkan SEBELUM route
