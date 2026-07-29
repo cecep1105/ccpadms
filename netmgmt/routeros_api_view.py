@@ -27,6 +27,13 @@ supaya tidak duplikat 3x spt yang sempat terjadi di frontend).
 
 Parameter kontrol (prefix underscore -- lihat netmgmt/list_utils.py):
     _page, _limit, _sort_by, _order, _q, _search_fields
+
+`get_routeros_connection()` DIEKSTRAK jadi fungsi TERPISAH (SEBELUMNYA
+logic ini ada LANGSUNG di dalam __init__ RouterOSCommandView) -- supaya
+bisa dipakai ULANG oleh view LAIN yang JUGA perlu konek ke router yang
+SAMA tapi py workflow LEBIH SPESIFIK drpd endpoint generik ini (lihat
+netmgmt/routeros_firewall_view.py::FirewallGrantAccessView -- workflow
+"copy rule sebelum BLOCK-ELSE" utk grant akses internet per-MAC).
 """
 import re
 
@@ -46,16 +53,49 @@ from netmgmt.list_utils import paginate_sort_filter, parse_list_params
 # RouterOS tidak terima parameter aneh yang tidak dia kenal.
 _CONTROL_PARAMS = {'_page', '_limit', '_sort_by', '_order', '_q', '_search_fields'}
 
+MIKROTIK_USERNAME = 'admin'  # TODO: kalau nanti multi-router dgn username beda2, jadikan bagian config per-router
+MIKROTIK_PORT = 8728
+
+
+class MikrotikConnectionError(Exception):
+    """Gagal terhubung/autentikasi ke router Mikrotik."""
+
+
+def get_routeros_connection(host: str):
+    """
+    Buka koneksi ke router Mikrotik -- return (connection, api).
+    WAJIB panggil `connection.disconnect()` setelah selesai (lihat pola
+    pemakaian di RouterOSCommandView.finalize_response() /
+    FirewallGrantAccessView.finalize_response()) -- jangan biarkan
+    koneksi menggantung.
+    """
+    if not settings.MIKROTIK_PASSWORD_ENCRYPTED:
+        raise MikrotikConnectionError(
+            'Password Mikrotik belum diisi (MIKROTIK_PASSWORD_ENCRYPTED di .env) -- lihat '
+            'netmgmt/crypto_utils.py & management command generate_mikrotik_key/encrypt_mikrotik_password.'
+        )
+    try:
+        password = decrypt_mikrotik_password(settings.MIKROTIK_PASSWORD_ENCRYPTED)
+    except NetmgmtCryptoError as exc:
+        raise MikrotikConnectionError(str(exc)) from exc
+
+    try:
+        connection = routeros_api.RouterOsApiPool(
+            host, username=MIKROTIK_USERNAME, password=password,
+            port=MIKROTIK_PORT, plaintext_login=True,
+        )
+        api = connection.get_api()
+    except Exception as exc:  # noqa: BLE001
+        raise MikrotikConnectionError(f"Gagal terhubung ke router '{host}': {exc}") from exc
+
+    return connection, api
+
 
 def _format_command(command: str) -> str:
     """'ip-dhcp_server-lease' -> '/ip/dhcp-server/lease' (lihat konvensi di docstring modul)."""
     mapping = {'_': '-', '-': '/'}
     pattern = re.compile('|'.join(re.escape(k) for k in mapping))
     return '/' + pattern.sub(lambda m: mapping[m.group(0)], command)
-
-
-class MikrotikConnectionError(Exception):
-    """Gagal terhubung/autentikasi ke router Mikrotik."""
 
 
 class RouterOSCommandView(APIView):
@@ -69,33 +109,14 @@ class RouterOSCommandView(APIView):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.username = 'admin'  # TODO: kalau nanti multi-router dgn username beda2, jadikan bagian config per-router
-        self.port = 8728
         self.connection = None
         self.api = None
-
-        if not settings.MIKROTIK_PASSWORD_ENCRYPTED:
-            raise MikrotikConnectionError(
-                'Password Mikrotik belum diisi (MIKROTIK_PASSWORD_ENCRYPTED di .env) -- lihat '
-                'netmgmt/crypto_utils.py & management command generate_mikrotik_key/encrypt_mikrotik_password.'
-            )
-        try:
-            self.password = decrypt_mikrotik_password(settings.MIKROTIK_PASSWORD_ENCRYPTED)
-        except NetmgmtCryptoError as exc:
-            raise MikrotikConnectionError(str(exc)) from exc
 
     def initial(self, request, *args, **kwargs):
         """Konek ke router SEBELUM get()/post() diproses -- host diambil dari URL (lihat api_urls.py)."""
         super().initial(request, *args, **kwargs)
         host = kwargs.get('host')
-        try:
-            self.connection = routeros_api.RouterOsApiPool(
-                host, username=self.username, password=self.password,
-                port=self.port, plaintext_login=True,
-            )
-            self.api = self.connection.get_api()
-        except Exception as exc:  # noqa: BLE001
-            raise MikrotikConnectionError(f"Gagal terhubung ke router '{host}': {exc}") from exc
+        self.connection, self.api = get_routeros_connection(host)
 
     def finalize_response(self, request, response, *args, **kwargs):
         """Tutup koneksi ke router SETELAH response selesai dibentuk -- jangan biarkan koneksi menggantung."""

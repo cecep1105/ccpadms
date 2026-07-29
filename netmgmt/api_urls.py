@@ -12,6 +12,7 @@ from .active_directory_view import (
     ADUserUnlockView,
 )
 from .routeros_api_view import RouterOSCommandView
+from .routeros_firewall_view import FirewallGrantAccessView
 from .zentyal_mail_view import (
     ZentyalMailBlockSendersView,
     ZentyalMailControlView,
@@ -37,6 +38,11 @@ app_name = 'netmgmt_api'
 
 urlpatterns = [
     # --- Mikrotik (RouterOS) -- lihat netmgmt/routeros_api_view.py ---
+    # PENTING: 'firewall/grant-access/' WAJIB didaftarkan SEBELUM route
+    # generik di bawahnya -- route generik pakai <path:command> yang
+    # GREEDY (nangkep APA PUN termasuk "firewall/grant-access"), Django
+    # coba pattern SESUAI URUTAN, jadi yang LEBIH SPESIFIK harus duluan.
+    path('routeros/<str:host>/firewall/grant-access/', FirewallGrantAccessView.as_view(), name='routeros-firewall-grant-access'),
     path('routeros/<str:host>/<path:command>/', RouterOSCommandView.as_view(), name='routeros-command'),
 
     # --- Active Directory -- lihat netmgmt/active_directory_view.py ---
