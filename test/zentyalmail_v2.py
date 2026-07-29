@@ -72,6 +72,7 @@ TETAP DIPERTAHANKAN (kompatibilitas, TIDAK diubah perilakunya):
 from __future__ import print_function
 
 import datetime
+import json
 import logging
 import os
 import pipes  # py2.7 -- shlex.quote() di py3, pipes.quote() di py2
@@ -180,6 +181,49 @@ class ValidationError(Exception):
 # Helper subprocess -- bungkus subprocess.Popen dgn logging error yg
 # konsisten (BUKAN bare except/pass spt versi sebelumnya).
 # ---------------------------------------------------------------------------
+def _get_json_body():
+    """
+    Ambil body JSON dari request POST -- KOMPATIBEL ke berbagai versi
+    Flask/Werkzeug lama (server ini py2.7, versi Flask-nya BISA SANGAT
+    LAWAS drpd yang dites di sandbox pengembangan).
+
+    Kenapa fungsi terpisah (bukan langsung `request.get_json(...)`):
+    DITEMUKAN LANGSUNG di server -- versi Flask/Werkzeug yang terpasang
+    di sistem ini TERNYATA Request object-nya TIDAK PUNYA method
+    `get_json()` sama sekali (AttributeError), method itu baru ada di
+    versi Werkzeug yang lebih baru. Fungsi ini coba BEBERAPA cara
+    berurutan, dari yang paling modern ke paling dasar/manual, supaya
+    JALAN di versi Flask APA PUN (termasuk yang sangat lawas):
+      1. `request.get_json(silent=True)` -- API modern, kalau ADA.
+      2. `request.json` -- property versi Flask lebih lama (masih ada
+         konsep parsing JSON otomatis, tapi lewat property bukan method).
+      3. Manual: `json.loads(request.get_data())` atau `request.data` --
+         cara PALING DASAR, parsing manual dari raw body, JALAN di semua
+         versi Werkzeug (get_data()/.data SELALU ada sejak versi lawas).
+    """
+    try:
+        return request.get_json(silent=True) or {}
+    except AttributeError:
+        pass
+
+    try:
+        return request.json or {}
+    except AttributeError:
+        pass
+
+    try:
+        raw = request.get_data()
+    except AttributeError:
+        raw = request.data
+    if not raw:
+        return {}
+    try:
+        return json.loads(raw)
+    except ValueError:
+        logger.warning('Gagal parse body JSON (raw): %r', raw[:200])
+        return {}
+
+
 def _run_shell(cmd):
     """Jalankan 1 command shell (STRING, boleh mengandung pipe |) -- WAJIB semua bagian variabel di dalam `cmd` SUDAH divalidasi/di-quote SEBELUM dipanggil fungsi ini."""
     try:
@@ -466,7 +510,7 @@ class POSTFIX(Resource):
         return {'result': ''}
 
     def post(self):
-        payload = request.get_json(silent=True) or {}
+        payload = _get_json_body()
         command = payload.get('command', '')
 
         if command == '':
@@ -569,7 +613,7 @@ class MailQ(Resource):
         return {'result': mmq, 'imaplogs': imaplogs}
 
     def post(self):
-        payload = request.get_json(silent=True) or {}
+        payload = _get_json_body()
         raw_qids = payload.get('qids', [])
         raw_sender = payload.get('sender', '')
         command = payload.get('command', 'DELETE')

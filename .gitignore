@@ -26,3 +26,5 @@ masterlogother/
 docker/nginx/certs/*.pem
 docker/nginx/certs/*.key
 docker/nginx/certs/*.crt
+
+celerybeat-schedule.*

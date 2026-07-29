@@ -400,7 +400,7 @@ CELERY_TASK_EAGER_PROPAGATES = True
 CELERY_BEAT_SCHEDULE = {
     'netmgmt-check-mailq': {
         'task': 'netmgmt.tasks.check_mailq',
-        'schedule': env.int('NETMGMT_MAILQ_CHECK_INTERVAL_SECONDS', default=60),
+        'schedule': env.int('NETMGMT_MAILQ_CHECK_INTERVAL_SECONDS', default=10),
     },
 }
 
