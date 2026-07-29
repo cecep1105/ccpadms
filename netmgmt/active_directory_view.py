@@ -143,6 +143,37 @@ def _group_to_dict(entry: dict) -> dict:
     }
 
 
+def get_recently_locked_users(minutes: int = 2) -> list:
+    """
+    Query AD utk user yang TERKUNCI dalam N menit terakhir (default 2) --
+    DIEKSTRAK jadi fungsi TERPISAH (SEBELUMNYA logic ini ada LANGSUNG di
+    ADLockedUsersListView.get()) supaya bisa dipakai ULANG oleh
+    netmgmt/tasks.py::check_ad_locked_users (Celery Beat, cek berkala &
+    broadcast lewat WebSocket ke indikator global Topbar).
+
+    KENAPA DIFILTER cuma N menit terakhir (BUKAN semua user yg PERNAH
+    terkunci): AD py GPO auto-unlock (lockoutDuration) yang SEHARUSNYA
+    otomatis buka kunci setelah beberapa menit -- TAPI atribut
+    `lockoutTime` di AD TETAP menyimpan waktu SAAT TERKUNCI (bukan status
+    "masih terkunci beneran SEKARANG"), jadi kalau TIDAK difilter, user
+    yang terkunci BERTAHUN-TAHUN lalu (skr sudah otomatis lepas kuncinya
+    scr efektif oleh AD, cuma atribut lockoutTime-nya tidak ikut ke-reset
+    ke 0) akan TETAP muncul di daftar, padahal SUDAH TIDAK relevan lagi.
+    Filter LDAP `(lockoutTime>=N)` dikerjakan SERVER-SIDE (bukan fetch
+    semua lalu filter Python) -- lebih efisien.
+    """
+    threshold = datetime.now() - timedelta(minutes=minutes)
+    filetime_threshold = convert_back(threshold.strftime('%Y-%m-%d %H:%M:%S.%f'))
+    with _get_ad_client() as client:
+        rows = client.search(
+            settings.AD_USER_BASE_DN,
+            '(&(objectClass=user)(objectCategory=person)(lockoutTime>=%d))' % filetime_threshold,
+            attributes=['sAMAccountName', 'displayName', 'mail', 'userPrincipalName', 'userAccountControl', 'memberOf', 'lockoutTime'],
+        )
+    all_users = [_user_to_dict(row) for row in rows]
+    return [u for u in all_users if u['is_locked']]
+
+
 class ADUserListView(APIView):
     """GET /api/v1/netmgmt/ad/users/?_page=&_limit=&_sort_by=&_order=&_q=&_search_fields= -- daftar user AD."""
     permission_classes = [IsAuthenticated, IsStaffRole]
@@ -321,22 +352,10 @@ class ADLockedUsersListView(APIView):
 
     def get(self, request):
         try:
-            with _get_ad_client() as client:
-                #filter user yang ke-locked 2 menit yang lalu (karena ada otomatis unlock dari GPO)
-                #jadi yang sudah lebih dari lima menit akan aktif lagi
-                #tidak menampilkan user yang nonaktif yang ke-locked (bisa jadi user yanng lebih dari 1 tahun kelocked akan ditampilkan juga, hehehe...)
-                twominutesago = datetime.now() - timedelta(minutes=2)
-                rows = client.search(
-                    settings.AD_USER_BASE_DN,
-                    '(&(objectClass=user)(objectCategory=person)(lockoutTime>=%d))' % convert_back(twominutesago.strftime("%Y-%m-%d %H:%M:%S.%f")),
-                    attributes=['sAMAccountName', 'displayName', 'mail', 'userPrincipalName', 'userAccountControl', 'memberOf', 'lockoutTime'],
-                )
-
+            users = get_recently_locked_users()
         except LDAPManagementError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
-        all_users = [_user_to_dict(row) for row in rows]
-        users = [u for u in all_users if u['is_locked']]
         params = parse_list_params(request)
         payload = paginate_sort_filter(users, **params)
         return Response(payload, status=status.HTTP_200_OK)

@@ -17,6 +17,8 @@ import logging
 from celery import shared_task
 
 from iclock.ws_utils import wsinfo  # GENERIK (terima groupname sbg parameter), dipakai ulang dari iclock -- lihat catatan di netmgmt/consumers.py
+from netmgmt.active_directory_view import get_recently_locked_users
+from netmgmt.ldap_utils import LDAPManagementError
 from netmgmt.zentyal_mail_view import ZentyalMailAPIError, call_flask_mail_api
 
 logger = logging.getLogger('netmgmt')
@@ -54,3 +56,26 @@ def check_mailq():
         'result': result,
     })
     logger.info('check_mailq: broadcast %d pesan queue ke group netmgmt.', len(result))
+
+
+@shared_task(ignore_result=True)
+def check_ad_locked_users():
+    """
+    Cek user AD yang terkunci OTOMATIS (2 menit terakhir, lihat
+    netmgmt/active_directory_view.py::get_recently_locked_users utk
+    kenapa filter waktu ini penting) & broadcast ke indikator global
+    Topbar (group 'netmgmt', section='ad_locked_users') -- SAMA pola dgn
+    check_mailq, TIDAK raise exception ke caller (AD lagi tidak
+    terjangkau TIDAK BOLEH bikin Celery Beat catat failure berulang).
+    """
+    try:
+        users = get_recently_locked_users()
+    except LDAPManagementError as exc:
+        logger.warning('check_ad_locked_users: gagal ambil data dari AD -- %s', exc)
+        return
+
+    wsinfo(GROUP_NETMGMT, 'ad_locked_users', {
+        'count': len(users),
+        'results': users,
+    })
+    logger.info('check_ad_locked_users: broadcast %d user terkunci ke group netmgmt.', len(users))
