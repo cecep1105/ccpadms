@@ -1,0 +1,51 @@
+#:local Host $host
+:global nwhost 
+/tool netwatch
+:local ADMSSTATUS [get [find where comment="ADMS-SERVER"] status]
+:local ADMSHOST [get [find where comment="ADMS-SERVER"] host]
+
+:local Status [get [find where host="$nwhost"] status]
+:local Comment [get [find where host="$nwhost"] comment]
+:local Interval [get [find where host="$nwhost"] interval]
+:local Since [get [find where host="$nwhost"] since]
+
+
+# Build comma-separated list of all currently-down hosts with their since time
+:local downHosts ""
+:foreach entry in=[find where status="down"] do={
+    :local h [get $entry host]
+    :local s [get $entry since]
+    :if ($downHosts = "") do={
+        :set downHosts "$h ($s)"
+    } else={
+        :set downHosts "$downHosts, $h ($s)"
+    }
+}
+
+# Timestamp at moment of request
+:local nowDate [/system clock get date]
+:local nowTime [/system clock get time]
+
+:local datarpi \
+"{\
+\"host\": \"$downHosts\",\
+\"status\": \"DOWN\",\
+\"since\": \"$nowDate $nowTime\",\
+\"admshost\": \"$ADMSHOST\",\
+\"admsstatus\": \"$ADMSSTATUS\"\
+}"
+
+:local data \
+"{ \
+\"host\": \"$nwhost\", \
+\"status\": \"$Status\",\
+\"since\": \"$Since\",\
+\"admshost\": \"$ADMSHOST\",\
+\"admsstatus\": \"$ADMSSTATUS\"\
+}"
+
+
+:if ($ADMSSTATUS = "up") do={
+    /tool fetch http-method=post http-header-field="Content-Type:application/json" http-data=$data url="http://$ADMSHOST:8000/api/v1/netmgmt/nwupdate"
+
+}
