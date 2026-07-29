@@ -57,3 +57,7 @@ SQLAlchemy>=2.0.51
 
 #Untuk network monitoring via mikrotik
 RouterOS-api>=0.21.0
+
+# Untuk panggil API internal Zentyal Mail (Flask, Python 2.7, jalan di
+# server mail terpisah) -- lihat netmgmt/zentyal_mail_view.py & test/zentyalmail_v2.py
+requests>=2.31

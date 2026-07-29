@@ -15,6 +15,8 @@ userAccountControl: bitmask status akun AD -- bit ACCOUNTDISABLE (nilai
 2) menandakan akun DINONAKTIFKAN. Field `is_enabled` di response API ini
 hasil decode bit itu, supaya frontend tidak perlu tahu detail bitmask AD.
 """
+from datetime import datetime, timezone
+
 from django.conf import settings
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -64,6 +66,27 @@ def _attr(entry: dict, name: str, default=''):
     return value
 
 
+def _filetime_to_iso(filetime_str) -> str | None:
+    """
+    Konversi Windows FILETIME (interval 100-nanosecond sejak 1601-01-01,
+    format yang dipakai AD utk lockoutTime/pwdLastSet/dst) -> string ISO
+    datetime (UTC) -- None kalau nilai 0/kosong (artinya "tidak berlaku").
+    """
+    try:
+        value = int(filetime_str)
+    except (TypeError, ValueError):
+        return None
+    if value == 0:
+        return None
+    EPOCH_AS_FILETIME = 116444736000000000  # 1970-01-01 dlm satuan FILETIME
+    HUNDREDS_OF_NANOSECONDS = 10000000
+    unix_timestamp = (value - EPOCH_AS_FILETIME) / HUNDREDS_OF_NANOSECONDS
+    try:
+        return datetime.fromtimestamp(unix_timestamp, tz=timezone.utc).isoformat()
+    except (ValueError, OSError, OverflowError):
+        return None
+
+
 def _user_to_dict(entry: dict) -> dict:
     uac = _attr(entry, 'userAccountControl', 0)
     try:
@@ -87,6 +110,9 @@ def _user_to_dict(entry: dict) -> dict:
         'user_principal_name': _attr(entry, 'userPrincipalName'),
         'is_enabled': not bool(uac & UAC_ACCOUNTDISABLE),
         'is_locked': is_locked,
+        # ISO datetime (UTC) KAPAN akun terkunci -- None kalau tidak
+        # terkunci. Frontend format jadi relatif ("2 menit lalu", dst).
+        'locked_at': _filetime_to_iso(lockout_time) if is_locked else None,
         'group_count': len(member_of) if isinstance(member_of, list) else 0,
         'member_of': member_of if isinstance(member_of, list) else [],
     }

@@ -101,7 +101,7 @@ def getmaillog(date_from,date_to):
 	# import socket, struct
 	import ipaddress
 	print(date_from,date_to)
-	conn = pymysql.connect('127.0.0.1','zentyal','8vp8972n','zentyal', cursorclass=pymysql.cursors.DictCursor)
+	conn = pymysql.connect('127.0.0.1','zentyal','!@8v28972n','zentyal', cursorclass=pymysql.cursors.DictCursor)
 	query = "select * from mail_message where timestamp BETWEEN '%s' AND '%s' " %( date_from, date_to)
 	cursor = conn.cursor()
 	ret = cursor.execute(query)

@@ -12,6 +12,19 @@ from .active_directory_view import (
     ADUserUnlockView,
 )
 from .routeros_api_view import RouterOSCommandView
+from .zentyal_mail_view import (
+    ZentyalMailBlockSendersView,
+    ZentyalMailControlView,
+    ZentyalMailDetailLogView,
+    ZentyalMailImapLogsView,
+    ZentyalMailIpViaEmailView,
+    ZentyalMailLogView,
+    ZentyalMailQHeaderView,
+    ZentyalMailQueueView,
+    ZentyalMailSaslLogsView,
+    ZentyalMailTodayLogView,
+    ZentyalMailTransportView,
+)
 from .zentyal_view import (
     ZentyalGroupListView,
     ZentyalGroupMembersView,
@@ -47,4 +60,17 @@ urlpatterns = [
     path('zentyal/groups/<path:group_dn>/members/', ZentyalGroupMembersView.as_view(), name='zentyal-group-members'),
     path('zentyal/group-membership/', ZentyalGroupMembershipView.as_view(), name='zentyal-group-membership'),
     path('zentyal/reset-password/', ZentyalResetPasswordView.as_view(), name='zentyal-reset-password'),
+
+    # --- Zentyal Mail API (Flask, mail queue/log/dst) -- lihat netmgmt/zentyal_mail_view.py ---
+    path('zentyal-mail/queue/', ZentyalMailQueueView.as_view(), name='zentyal-mail-queue'),
+    path('zentyal-mail/today-log/', ZentyalMailTodayLogView.as_view(), name='zentyal-mail-today-log'),
+    path('zentyal-mail/detail-log/', ZentyalMailDetailLogView.as_view(), name='zentyal-mail-detail-log'),
+    path('zentyal-mail/qheader/', ZentyalMailQHeaderView.as_view(), name='zentyal-mail-qheader'),
+    path('zentyal-mail/log/', ZentyalMailLogView.as_view(), name='zentyal-mail-log'),
+    path('zentyal-mail/transport/', ZentyalMailTransportView.as_view(), name='zentyal-mail-transport'),
+    path('zentyal-mail/block-senders/', ZentyalMailBlockSendersView.as_view(), name='zentyal-mail-block-senders'),
+    path('zentyal-mail/imap-logs/', ZentyalMailImapLogsView.as_view(), name='zentyal-mail-imap-logs'),
+    path('zentyal-mail/sasl-logs/', ZentyalMailSaslLogsView.as_view(), name='zentyal-mail-sasl-logs'),
+    path('zentyal-mail/ip-via-email/', ZentyalMailIpViaEmailView.as_view(), name='zentyal-mail-ip-via-email'),
+    path('zentyal-mail/control/', ZentyalMailControlView.as_view(), name='zentyal-mail-control'),
 ]

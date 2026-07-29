@@ -501,3 +501,12 @@ ZENTYAL_GROUP_BASE_DN = env('ZENTYAL_GROUP_BASE_DN', default='') or ZENTYAL_BASE
 ZENTYAL_USE_SSL = env.bool('ZENTYAL_USE_SSL', default=False)
 ZENTYAL_CONNECT_TIMEOUT = env.int('ZENTYAL_CONNECT_TIMEOUT', default=5)
 ZENTYAL_MAX_FETCH_ROWS = env.int('ZENTYAL_MAX_FETCH_ROWS', default=5000)
+
+# --- Zentyal Mail API (Flask, Python 2.7, jalan TERPISAH di server mail
+# -- lihat test/zentyalmail_v2.py & test/README.md) -- BEDA dari koneksi
+# LDAP Zentyal di atas (itu utk users/groups, ini utk mail queue/log/dst,
+# protokolnya HTTP+JSON biasa, bukan LDAP). ---
+ZENTYAL_MAIL_ENCRYPTION_KEY = env('ZENTYAL_MAIL_ENCRYPTION_KEY', default='')
+ZENTYAL_MAIL_API_URL = env('ZENTYAL_MAIL_API_URL', default='')  # mis. 'http://mail.internal:5100'
+ZENTYAL_MAIL_API_TOKEN_ENCRYPTED = env('ZENTYAL_MAIL_API_TOKEN_ENCRYPTED', default='')
+ZENTYAL_MAIL_API_TIMEOUT = env.int('ZENTYAL_MAIL_API_TIMEOUT', default=10)
