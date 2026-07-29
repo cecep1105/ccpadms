@@ -86,7 +86,12 @@ def call_flask_mail_api(method: str, path: str, params: dict | None = None, json
 class ZentyalMailQueueView(APIView):
     """
     GET  /api/v1/netmgmt/zentyal-mail/queue/?_page=&_limit=&_sort_by=&_order=&_q=&_search_fields=
-         -- daftar mail queue (dipaginasi/sort/filter) + imaplogs (APA ADANYA, tidak dipaginasi -- data sekunder).
+         -- daftar mail queue (dipaginasi/sort/filter) + imaplogs (APA ADANYA, tidak dipaginasi -- data sekunder)
+         + total_count/active_count/deferred_count (dihitung dari SELURUH
+         queue SEBELUM dipaginasi -- BEDA dari `count`/`results` yang
+         cuma refleksikan halaman/filter yang SEDANG aktif, field *_count
+         ini SELALU angka GLOBAL apa pun filter/halaman yg dipilih user,
+         dipakai frontend utk indikator ringkasan di sebelah search bar).
     POST /api/v1/netmgmt/zentyal-mail/queue/ -- {"command": "DELETE"|"REQUEUE"|"DELQFROMSENDER", "qids": [...], "sender": "..."}
     """
     permission_classes = [IsAuthenticated, IsStaffRole]
@@ -97,12 +102,18 @@ class ZentyalMailQueueView(APIView):
         except ZentyalMailAPIError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
+        all_items = data.get('result', [])
+
         list_params = parse_list_params(request)
         # search default ke sender+recipient+id kalau frontend tidak kirim _search_fields eksplisit
         if not list_params['search_fields']:
             list_params['search_fields'] = ['sender', 'recipient', 'id']
-        payload = paginate_sort_filter(data.get('result', []), **list_params)
+        payload = paginate_sort_filter(all_items, **list_params)
         payload['imaplogs'] = data.get('imaplogs', [])
+        # Dihitung dari all_items (SEBELUM dipaginasi/difilter) -- lihat catatan docstring.
+        payload['total_count'] = len(all_items)
+        payload['active_count'] = sum(1 for m in all_items if m.get('status') == 'active')
+        payload['deferred_count'] = sum(1 for m in all_items if m.get('status') == 'deferred')
         return Response(payload, status=status.HTTP_200_OK)
 
     def post(self, request):
@@ -184,8 +195,22 @@ class ZentyalMailLogView(APIView):
 
 class ZentyalMailTransportView(APIView):
     """
-    GET  /api/v1/netmgmt/zentyal-mail/transport/?_page=&_limit=&_sort_by=&_order=&_q= -- daftar transport map.
+    GET  /api/v1/netmgmt/zentyal-mail/transport/ -- daftar transport map (TIDAK dipaginasi, lihat catatan di bawah).
     POST /api/v1/netmgmt/zentyal-mail/transport/ -- {"transport_data": [{"domain":..., "target":..., "status": true|false}, ...]}
+
+    SENGAJA TIDAK pakai paginate_sort_filter() (BEDA dari endpoint netmgmt
+    lain) -- frontend (transport-map-editor.tsx) edit SELURUH tabel
+    sekaligus lalu "Simpan Semua" (POST transport_data = SEMUA baris,
+    Flask tulis ULANG seluruh file transport tiap kali) -- kalau di-
+    paginasi, baris di halaman LAIN akan HILANG saat disimpan (cuma baris
+    yang lagi tampil yang terkirim balik). Bentuk respons WAJIB tetap
+    {"result": [...]} apa adanya (BUKAN {"results": [...], "count": ...})
+    -- SEMPAT KELIRU diterapkan pagination di sini pada sesi sebelumnya,
+    bikin frontend baca `data.result` yang undefined (field-nya jadi
+    `results`, plural) -> "Cannot read properties of undefined (reading
+    'length')". Sudah diperbaiki, JANGAN tambahkan paginate_sort_filter()
+    lagi ke endpoint ini kalau frontend-nya masih pola "edit semua, simpan
+    semua".
     """
     permission_classes = [IsAuthenticated, IsStaffRole]
 
@@ -194,12 +219,7 @@ class ZentyalMailTransportView(APIView):
             data = call_flask_mail_api('GET', '/postfix', params={'command': 'transport_map'})
         except ZentyalMailAPIError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
-
-        list_params = parse_list_params(request)
-        if not list_params['search_fields']:
-            list_params['search_fields'] = ['domain', 'target']
-        payload = paginate_sort_filter(data.get('result', []), **list_params)
-        return Response(payload, status=status.HTTP_200_OK)
+        return Response(data, status=status.HTTP_200_OK)
 
     def post(self, request):
         try:
