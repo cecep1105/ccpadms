@@ -389,6 +389,21 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_ALWAYS_EAGER = env.bool('CELERY_TASK_ALWAYS_EAGER', default=False)
 CELERY_TASK_EAGER_PROPAGATES = True
 
+# Celery Beat -- PENJADWAL task periodik (BEDA dari worker biasa, WAJIB
+# dijalankan sbg proses TERPISAH: `celery -A config beat --loglevel=info`
+# -- worker biasa TETAP perlu jalan jg utk benar2 EKSEKUSI task-nya, Beat
+# cuma "nyalain alarm", tidak eksekusi sendiri).
+#
+# check_mailq (netmgmt/tasks.py): cek isi mailq Zentyal tiap 1 menit,
+# broadcast lewat WebSocket (group 'netmgmt', section='mailq') ke halaman
+# Mail Queue yang lagi dibuka, biar update TANPA refresh manual.
+CELERY_BEAT_SCHEDULE = {
+    'netmgmt-check-mailq': {
+        'task': 'netmgmt.tasks.check_mailq',
+        'schedule': env.int('NETMGMT_MAILQ_CHECK_INTERVAL_SECONDS', default=60),
+    },
+}
+
 # ---------------------------------------------------------------------------
 # mclock -- Mobile Attendance (monitoring data absensi mobile dari MSSQL
 # eksternal, di luar database Django ini). Koneksi pakai pymssql, password

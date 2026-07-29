@@ -14,6 +14,7 @@ from channels.auth import AuthMiddlewareStack  # noqa: E402
 from channels.routing import ProtocolTypeRouter, URLRouter  # noqa: E402
 
 import iclock.routing  # noqa: E402
+import netmgmt.routing  # noqa: E402
 from iclock.ws_auth import JWTAuthMiddleware  # noqa: E402
 
 application = ProtocolTypeRouter({
@@ -23,9 +24,14 @@ application = ProtocolTypeRouter({
     # JWTAuthMiddleware coba lagi via ?token= JWT (frontend Next.js,
     # cross-origin, tidak punya session cookie). Keduanya additive, tidak
     # saling mengganggu.
+    #
+    # iclock.routing & netmgmt.routing DIGABUNG jadi 1 URLRouter -- 2
+    # endpoint WS terpisah (/ws/iclock & /ws/netmgmt), TAPI share middleware
+    # auth yang SAMA (JWTAuthMiddleware/AuthMiddlewareStack cuma perlu
+    # dipasang SEKALI, membungkus SEMUA url pattern WS, bukan per-app).
     'websocket': AuthMiddlewareStack(
         JWTAuthMiddleware(
-            URLRouter(iclock.routing.websocket_urlpatterns)
+            URLRouter(iclock.routing.websocket_urlpatterns + netmgmt.routing.websocket_urlpatterns)
         )
     ),
 })
