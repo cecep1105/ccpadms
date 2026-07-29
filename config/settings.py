@@ -404,12 +404,12 @@ CELERY_BEAT_SCHEDULE = {
     },
     'netmgmt-check-ad-locked-users': {
         'task': 'netmgmt.tasks.check_ad_locked_users',
-        # Default 30 detik -- filter di get_recently_locked_users() cuma
+        # Default 10 detik -- filter di get_recently_locked_users() cuma
         # tangkap user terkunci 2 menit TERAKHIR, jadi interval cek ini
         # PERLU lebih pendek dari itu supaya user yg baru saja terkunci
         # tertangkap tepat waktu (bukan cuma kebetulan lolos sebelum
         # jendela 2 menitnya berakhir).
-        'schedule': env.int('NETMGMT_AD_LOCKED_CHECK_INTERVAL_SECONDS', default=30),
+        'schedule': env.int('NETMGMT_AD_LOCKED_CHECK_INTERVAL_SECONDS', default=10),
     },
 }
 
