@@ -15,7 +15,7 @@ userAccountControl: bitmask status akun AD -- bit ACCOUNTDISABLE (nilai
 2) menandakan akun DINONAKTIFKAN. Field `is_enabled` di response API ini
 hasil decode bit itu, supaya frontend tidak perlu tahu detail bitmask AD.
 """
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from django.conf import settings
 from rest_framework import status
@@ -65,6 +65,21 @@ def _attr(entry: dict, name: str, default=''):
         return value[0] if value else default
     return value
 
+def convert_back(timestamp_string):
+    """Convert a timestamp in Y=M=D H:M:S.f format into a windows filetime."""
+
+    WINDOWS_TICKS = int(1/10**-7)  # 10,000,000 (100 nanoseconds or .1 microseconds)
+    WINDOWS_EPOCH = datetime.strptime('1601-01-01 00:00:00','%Y-%m-%d %H:%M:%S')
+    POSIX_EPOCH = datetime.strptime('1970-01-01 00:00:00','%Y-%m-%d %H:%M:%S')
+    EPOCH_DIFF = (POSIX_EPOCH - WINDOWS_EPOCH).total_seconds()  # 11644473600.0
+    # WINDOWS_TICKS_TO_POSIX_EPOCH = EPOCH_DIFF * WINDOWS_TICKS  # 116444736000000000.0
+
+    import time
+
+    dt = datetime.strptime(timestamp_string, '%Y-%m-%d %H:%M:%S.%f')
+    posix_secs = int(time.mktime(dt.timetuple()))
+    winticks = (posix_secs + int(EPOCH_DIFF)) * WINDOWS_TICKS
+    return winticks
 
 def _filetime_to_iso(filetime_str) -> str | None:
     """
@@ -307,11 +322,16 @@ class ADLockedUsersListView(APIView):
     def get(self, request):
         try:
             with _get_ad_client() as client:
+                #filter user yang ke-locked 2 menit yang lalu (karena ada otomatis unlock dari GPO)
+                #jadi yang sudah lebih dari lima menit akan aktif lagi
+                #tidak menampilkan user yang nonaktif yang ke-locked (bisa jadi user yanng lebih dari 1 tahun kelocked akan ditampilkan juga, hehehe...)
+                twominutesago = datetime.now() - timedelta(minutes=2)
                 rows = client.search(
                     settings.AD_USER_BASE_DN,
-                    '(&(objectClass=user)(objectCategory=person))',
+                    '(&(objectClass=user)(objectCategory=person)(lockoutTime>=%d))' % convert_back(twominutesago.strftime("%Y-%m-%d %H:%M:%S.%f")),
                     attributes=['sAMAccountName', 'displayName', 'mail', 'userPrincipalName', 'userAccountControl', 'memberOf', 'lockoutTime'],
                 )
+
         except LDAPManagementError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
