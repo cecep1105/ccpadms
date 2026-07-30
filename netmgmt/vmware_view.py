@@ -14,7 +14,7 @@ Scope detail yang diambil (sesuai kebutuhan yang diminta): guest OS/IP/
 hostname/tools status + disk & datastore usage -- BUKAN network adapter/
 port group (di luar scope saat ini, gampang ditambah nanti kalau perlu).
 """
-import ssl  # noqa: F401 -- disimpan sbg referensi kalau nanti perlu custom SSLContext, saat ini pakai disableSslCertValidation (lebih simpel, lihat get_vmware_connection())
+import ssl  # WAJIB -- dipakai bangun SSLContext eksplisit di get_vmware_connection() (lihat catatan di sana knp disableSslCertValidation saja tidak cukup andal)
 
 from django.conf import settings
 from pyVim.connect import Disconnect, SmartConnect
@@ -50,14 +50,30 @@ def get_vmware_connection():
     except NetmgmtCryptoError as exc:
         raise VMwareConnectionError(str(exc)) from exc
 
+    # PENTING (koreksi dari versi sebelumnya): parameter bawaan pyVmomi
+    # `disableSslCertValidation=True` TERNYATA TIDAK SELALU ANDAL menonaktifkan
+    # verifikasi sertifikat di semua versi Python/pyVmomi -- dikonfirmasi
+    # LANGSUNG dari error produksi ("[SSL: CERTIFICATE_VERIFY_FAILED]
+    # unable to get local issuer certificate") MESKI flag itu sudah di-set.
+    # Ini masalah yang cukup dikenal di komunitas pyVmomi. Solusi yang
+    # lebih ANDAL (dipakai contoh resmi VMware & komunitas): bangun
+    # ssl.SSLContext EKSPLISIT dgn verify_mode=CERT_NONE, teruskan lewat
+    # parameter `sslContext` -- BUKAN cuma mengandalkan flag saja.
+    ssl_context = None
+    if settings.VMWARE_ALLOW_SELF_SIGNED_CERT:
+        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+
     try:
         si = SmartConnect(
             host=settings.VMWARE_HOST,
             user=settings.VMWARE_USER,
             pwd=password,
-            # vCenter on-prem BIASANYA sertifikat self-signed -- opsi
-            # bawaan pyVmomi ini LEBIH SIMPEL drpd bikin ssl.SSLContext
-            # custom manual, cukup utk kebutuhan yang sama.
+            sslContext=ssl_context,
+            # Tetap disertakan sbg lapis kedua/fallback (TIDAK merugikan
+            # kalau sslContext di atas sudah menangani -- beberapa jalur
+            # kode internal pyVmomi masih mengecek flag ini jg).
             disableSslCertValidation=settings.VMWARE_ALLOW_SELF_SIGNED_CERT,
         )
     except Exception as exc:  # noqa: BLE001
