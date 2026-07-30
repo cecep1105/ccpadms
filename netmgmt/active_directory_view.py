@@ -18,6 +18,7 @@ hasil decode bit itu, supaya frontend tidak perlu tahu detail bitmask AD.
 from datetime import datetime, timezone, timedelta
 
 from django.conf import settings
+from ldap3.utils.dn import escape_rdn
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -29,6 +30,13 @@ from netmgmt.ldap_utils import LDAPManagementClient, LDAPManagementError
 from netmgmt.list_utils import paginate_sort_filter, parse_list_params
 
 UAC_ACCOUNTDISABLE = 2  # bit userAccountControl -- akun dinonaktifkan
+UAC_NORMAL_ACCOUNT = 512  # bit dasar "akun user biasa" (BUKAN computer/trust account) -- WAJIB ada di userAccountControl user baru
+
+
+def _dn_to_domain_fqdn(base_dn: str) -> str:
+    """'DC=contoso,DC=com' -> 'contoso.com' -- dipakai susun userPrincipalName (username@domain) saat bikin user baru."""
+    parts = [part.split('=', 1)[1] for part in base_dn.split(',') if part.strip().upper().startswith('DC=')]
+    return '.'.join(parts)
 
 
 def _get_ad_client() -> LDAPManagementClient:
@@ -384,3 +392,111 @@ class ADUserUnlockView(APIView):
             return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
         return Response({'success': True, 'message': 'User berhasil di-unlock.'}, status=status.HTTP_200_OK)
+
+
+class ADUserCreateView(APIView):
+    """
+    POST /api/v1/netmgmt/ad/users/create/
+    Body: {"username": "budi.santoso", "display_name": "Budi Santoso", "first_name": "Budi", "last_name": "Santoso", "email": "budi@contoso.com", "password": "..."}
+
+    Alur bikin user AD (LDAP tidak bisa 1 langkah spt SQL INSERT biasa):
+      1. `add()` entry BARU dgn userAccountControl=514 (512 NORMAL_ACCOUNT +
+         2 ACCOUNTDISABLE, dijumlah via bitwise OR -- BUKAN "546", itu
+         salah ketik di versi draft awal, sudah diperbaiki) -- AD MENOLAK bikin akun langsung AKTIF tanpa
+         password, jadi HARUS mulai dari status nonaktif dulu.
+      2. Set password (`unicodePwd`, format UTF-16-LE -- lihat
+         set_password() di ldap_utils.py) -- method ini KHUSUS AD, WAJIB
+         koneksi SSL/TLS (AD_USE_SSL=True), SAMA persis constraint yang
+         sudah berlaku di ADResetPasswordView.
+      3. `replace_attribute()` userAccountControl jadi 512 (NORMAL_ACCOUNT
+         SAJA, tanpa ACCOUNTDISABLE) -- akun jadi AKTIF, cuma bisa
+         dilakukan SETELAH password valid ter-set (kalau langkah 2 gagal/
+         password tidak memenuhi policy, langkah ini TIDAK dijalankan --
+         akun tertinggal nonaktif, BUKAN aktif tanpa password yg valid).
+    """
+    permission_classes = [IsAuthenticated, IsStaffRole]
+
+    def post(self, request):
+        username = (request.data.get('username') or '').strip()
+        display_name = (request.data.get('display_name') or '').strip()
+        first_name = (request.data.get('first_name') or '').strip()
+        last_name = (request.data.get('last_name') or '').strip()
+        email = (request.data.get('email') or '').strip()
+        password = request.data.get('password') or ''
+
+        if not username:
+            return Response({'error': "'username' wajib diisi."}, status=status.HTTP_400_BAD_REQUEST)
+        if not display_name:
+            return Response({'error': "'display_name' wajib diisi."}, status=status.HTTP_400_BAD_REQUEST)
+        if not password:
+            return Response({'error': "'password' wajib diisi."}, status=status.HTTP_400_BAD_REQUEST)
+
+        domain_fqdn = _dn_to_domain_fqdn(settings.AD_USER_BASE_DN)
+        user_dn = f'CN={escape_rdn(display_name)},{settings.AD_USER_BASE_DN}'
+
+        attributes = {
+            'sAMAccountName': username,
+            'userPrincipalName': f'{username}@{domain_fqdn}' if domain_fqdn else username,
+            'displayName': display_name,
+            'givenName': first_name or display_name,
+            'sn': last_name or display_name,
+            'userAccountControl': str(UAC_NORMAL_ACCOUNT | UAC_ACCOUNTDISABLE),
+        }
+        if email:
+            attributes['mail'] = email
+
+        try:
+            with _get_ad_client() as client:
+                client.add_entry(user_dn, ['top', 'person', 'organizationalPerson', 'user'], attributes)
+                try:
+                    client.set_password(user_dn, password, use_ad_method=True)
+                except LDAPManagementError as exc:
+                    # User TERLANJUR dibuat (nonaktif), tapi password gagal
+                    # ter-set (mis. tidak memenuhi password policy AD) --
+                    # JANGAN aktifkan, kembalikan pesan JELAS supaya admin
+                    # tahu perlu reset password manual atau hapus user ini.
+                    return Response(
+                        {'error': f"User dibuat TAPI gagal set password (kemungkinan tidak memenuhi kebijakan password AD): {exc}. Akun masih NONAKTIF, reset password manual atau hapus user ini."},
+                        status=status.HTTP_502_BAD_GATEWAY,
+                    )
+                client.replace_attribute(user_dn, 'userAccountControl', str(UAC_NORMAL_ACCOUNT))
+        except LDAPManagementError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        return Response({'success': True, 'message': 'User berhasil dibuat & diaktifkan.', 'dn': user_dn}, status=status.HTTP_201_CREATED)
+
+
+class ADGroupCreateView(APIView):
+    """
+    POST /api/v1/netmgmt/ad/groups/create/
+    Body: {"name": "IT Support", "description": "..."}
+    Bikin security group GLOBAL biasa (groupType=-2147483646) -- jenis
+    paling umum dipakai (BEDA dari distribution group/universal/domain
+    local, di luar scope saat ini, gampang ditambah nanti kalau perlu).
+    """
+    permission_classes = [IsAuthenticated, IsStaffRole]
+
+    GROUP_TYPE_GLOBAL_SECURITY = '-2147483646'
+
+    def post(self, request):
+        name = (request.data.get('name') or '').strip()
+        description = (request.data.get('description') or '').strip()
+
+        if not name:
+            return Response({'error': "'name' wajib diisi."}, status=status.HTTP_400_BAD_REQUEST)
+
+        group_dn = f'CN={escape_rdn(name)},{settings.AD_GROUP_BASE_DN}'
+        attributes = {
+            'sAMAccountName': name,
+            'groupType': self.GROUP_TYPE_GLOBAL_SECURITY,
+        }
+        if description:
+            attributes['description'] = description
+
+        try:
+            with _get_ad_client() as client:
+                client.add_entry(group_dn, ['top', 'group'], attributes)
+        except LDAPManagementError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        return Response({'success': True, 'message': 'Group berhasil dibuat.', 'dn': group_dn}, status=status.HTTP_201_CREATED)

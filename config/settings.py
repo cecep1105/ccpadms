@@ -547,6 +547,13 @@ ZENTYAL_GROUP_BASE_DN = env('ZENTYAL_GROUP_BASE_DN', default='') or ZENTYAL_BASE
 ZENTYAL_USE_SSL = env.bool('ZENTYAL_USE_SSL', default=False)
 ZENTYAL_CONNECT_TIMEOUT = env.int('ZENTYAL_CONNECT_TIMEOUT', default=5)
 ZENTYAL_MAX_FETCH_ROWS = env.int('ZENTYAL_MAX_FETCH_ROWS', default=5000)
+# gidNumber DEFAULT utk user BARU (lihat netmgmt/zentyal_view.py::ZentyalUserCreateView)
+# -- GID grup Unix biasa dipakai BERSAMA banyak user (BUKAN dihitung
+# otomatis per-user spt uidNumber), jadi WAJIB dikonfigurasi eksplisit
+# sesuai grup default di server Zentyal Anda (cek `getent group users`
+# di server itu kalau tidak yakin). Default 100 = GID grup "users" baku
+# di Debian (dasar OS Zentyal 3.4), TAPI VERIFIKASI DULU sebelum pakai.
+ZENTYAL_DEFAULT_GID_NUMBER = env.int('ZENTYAL_DEFAULT_GID_NUMBER', default=100)
 
 # --- Zentyal Mail API (Flask, Python 2.7, jalan TERPISAH di server mail
 # -- lihat test/zentyalmail_v2.py & test/README.md) -- BEDA dari koneksi

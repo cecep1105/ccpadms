@@ -258,3 +258,130 @@ class ZentyalResetPasswordView(APIView):
             return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
         return Response({'success': True, 'message': 'Password berhasil direset.'}, status=status.HTTP_200_OK)
+
+
+def _next_available_number(client: LDAPManagementClient, base_dn: str, object_class: str, attribute: str, start_from: int) -> int:
+    """
+    Cari nilai INTEGER berikutnya yang belum dipakai utk atribut numerik
+    (uidNumber/gidNumber) -- LDAP TIDAK PUNYA auto-increment bawaan spt
+    SQL, jadi query SEMUA nilai yang ADA, ambil MAX + 1. CATATAN: ada
+    risiko RACE CONDITION kalau 2 user dibuat BERSAMAAN persis (dapat
+    nomor sama) -- cukup kecil kemungkinannya utk pemakaian admin manual
+    spt fitur ini, TAPI BUKAN jaminan atomicity penuh (LDAP tidak
+    ⚠️ BUG DITEMUKAN & DIPERBAIKI saat testing: versi SEBELUMNYA susun
+    filter LDAP jadi `(objectClass=posixAccount=uidNumber=*)` (SALAH,
+    3 tanda '=' ditumpuk jadi satu klausa, filter TIDAK VALID) -- akibatnya
+    search SELALU kosong, fungsi INI selalu jatuh ke `start_from` (uid/gid
+    number jadi angka awal yg SAMA terus, BUKAN increment dari data yang
+    sungguh ada) -- ketahuan LANGSUNG dari testing (harusnya 2011,
+    ternyata selalu 2000), BUKAN asumsi. Filter sekarang benar:
+    `(&(objectClass=posixAccount)(uidNumber=*))`.
+    """
+    rows = client.search(base_dn, f'(&({object_class})({attribute}=*))', attributes=[attribute])
+    numbers = []
+    for row in rows:
+        value = row.get(attribute)
+        if isinstance(value, list):
+            value = value[0] if value else None
+        try:
+            numbers.append(int(value))
+        except (TypeError, ValueError):
+            continue
+    return (max(numbers) + 1) if numbers else start_from
+
+
+class ZentyalUserCreateView(APIView):
+    """
+    POST /api/v1/netmgmt/zentyal/users/create/
+    Body: {"username": "budi", "display_name": "Budi Santoso", "last_name": "Santoso", "email": "budi@contoh.com", "password": "..."}
+
+    uidNumber dihitung OTOMATIS (MAX+1 dari user yang ada, lihat
+    _next_available_number()) -- gidNumber pakai ZENTYAL_DEFAULT_GID_NUMBER
+    (config, BUKAN dihitung -- grup Unix dipakai BERSAMA banyak user,
+    lihat catatan di config/settings.py).
+    """
+    permission_classes = [IsAuthenticated, IsStaffRole]
+
+    def post(self, request):
+        username = (request.data.get('username') or '').strip()
+        display_name = (request.data.get('display_name') or '').strip()
+        last_name = (request.data.get('last_name') or '').strip()
+        email = (request.data.get('email') or '').strip()
+        password = request.data.get('password') or ''
+
+        if not username:
+            return Response({'error': "'username' wajib diisi."}, status=status.HTTP_400_BAD_REQUEST)
+        if not display_name:
+            return Response({'error': "'display_name' wajib diisi."}, status=status.HTTP_400_BAD_REQUEST)
+        if not password:
+            return Response({'error': "'password' wajib diisi."}, status=status.HTTP_400_BAD_REQUEST)
+        if len(password) < 8:
+            return Response({'error': 'Password minimal 8 karakter.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user_dn = f'uid={LDAPManagementClient.escape(username)},{settings.ZENTYAL_USER_BASE_DN}'
+
+        try:
+            with _get_zentyal_client() as client:
+                uid_number = _next_available_number(client, settings.ZENTYAL_USER_BASE_DN, 'objectClass=posixAccount', 'uidNumber', 2000)
+
+                attributes = {
+                    'uid': username,
+                    'cn': display_name,
+                    'sn': last_name or display_name,
+                    'uidNumber': str(uid_number),
+                    'gidNumber': str(settings.ZENTYAL_DEFAULT_GID_NUMBER),
+                    'homeDirectory': f'/home/{username}',
+                    'loginShell': '/bin/bash',
+                    'mailHomeDirectory': f'/home/{username}/Maildir',
+                }
+                if email:
+                    attributes['mail'] = email
+
+                client.add_entry(user_dn, ['inetOrgPerson', 'posixAccount', 'usereboxmail'], attributes)
+                try:
+                    client.set_password(user_dn, password, use_ad_method=False)
+                except LDAPManagementError as exc:
+                    return Response(
+                        {'error': f'User dibuat TAPI gagal set password: {exc}. Reset password manual atau hapus user ini.'},
+                        status=status.HTTP_502_BAD_GATEWAY,
+                    )
+        except LDAPManagementError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        return Response({'success': True, 'message': 'User berhasil dibuat.', 'dn': user_dn, 'uid_number': uid_number}, status=status.HTTP_201_CREATED)
+
+
+class ZentyalGroupCreateView(APIView):
+    """
+    POST /api/v1/netmgmt/zentyal/groups/create/
+    Body: {"name": "tim-support", "description": "..."}
+    Bikin posixGroup biasa (BUKAN zentyalDistributionGroup/mailing list --
+    di luar scope saat ini, gampang ditambah nanti kalau perlu bikin jenis itu jg).
+    """
+    permission_classes = [IsAuthenticated, IsStaffRole]
+
+    def post(self, request):
+        name = (request.data.get('name') or '').strip()
+        description = (request.data.get('description') or '').strip()
+
+        if not name:
+            return Response({'error': "'name' wajib diisi."}, status=status.HTTP_400_BAD_REQUEST)
+
+        group_dn = f'cn={LDAPManagementClient.escape(name)},{settings.ZENTYAL_GROUP_BASE_DN}'
+
+        try:
+            with _get_zentyal_client() as client:
+                gid_number = _next_available_number(client, settings.ZENTYAL_GROUP_BASE_DN, 'objectClass=posixGroup', 'gidNumber', 2000)
+
+                attributes = {
+                    'cn': name,
+                    'gidNumber': str(gid_number),
+                }
+                if description:
+                    attributes['description'] = description
+
+                client.add_entry(group_dn, ['posixGroup'], attributes)
+        except LDAPManagementError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        return Response({'success': True, 'message': 'Group berhasil dibuat.', 'dn': group_dn, 'gid_number': gid_number}, status=status.HTTP_201_CREATED)

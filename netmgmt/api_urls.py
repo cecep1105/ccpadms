@@ -2,11 +2,13 @@ from django.urls import path
 
 from .active_directory_dns_view import ADDNSRecordActionView, ADDNSRecordListView, ADDNSZoneListView
 from .active_directory_view import (
+    ADGroupCreateView,
     ADGroupListView,
     ADGroupMembersView,
     ADGroupMembershipView,
     ADLockedUsersListView,
     ADResetPasswordView,
+    ADUserCreateView,
     ADUserListView,
     ADUserToggleStatusView,
     ADUserUnlockView,
@@ -29,10 +31,12 @@ from .zentyal_mail_view import (
     ZentyalMailTransportView,
 )
 from .zentyal_view import (
+    ZentyalGroupCreateView,
     ZentyalGroupListView,
     ZentyalGroupMembersView,
     ZentyalGroupMembershipView,
     ZentyalResetPasswordView,
+    ZentyalUserCreateView,
     ZentyalUserListView,
 )
 
@@ -61,7 +65,9 @@ urlpatterns = [
 
     # --- Active Directory -- lihat netmgmt/active_directory_view.py ---
     path('ad/users/', ADUserListView.as_view(), name='ad-users'),
+    path('ad/users/create/', ADUserCreateView.as_view(), name='ad-user-create'),
     path('ad/groups/', ADGroupListView.as_view(), name='ad-groups'),
+    path('ad/groups/create/', ADGroupCreateView.as_view(), name='ad-group-create'),
     path('ad/groups/<path:group_dn>/members/', ADGroupMembersView.as_view(), name='ad-group-members'),
     path('ad/group-membership/', ADGroupMembershipView.as_view(), name='ad-group-membership'),
     path('ad/reset-password/', ADResetPasswordView.as_view(), name='ad-reset-password'),
@@ -76,7 +82,9 @@ urlpatterns = [
 
     # --- Zentyal LDAP (mail server) -- lihat netmgmt/zentyal_view.py ---
     path('zentyal/users/', ZentyalUserListView.as_view(), name='zentyal-users'),
+    path('zentyal/users/create/', ZentyalUserCreateView.as_view(), name='zentyal-user-create'),
     path('zentyal/groups/', ZentyalGroupListView.as_view(), name='zentyal-groups'),
+    path('zentyal/groups/create/', ZentyalGroupCreateView.as_view(), name='zentyal-group-create'),
     path('zentyal/groups/<path:group_dn>/members/', ZentyalGroupMembersView.as_view(), name='zentyal-group-members'),
     path('zentyal/group-membership/', ZentyalGroupMembershipView.as_view(), name='zentyal-group-membership'),
     path('zentyal/reset-password/', ZentyalResetPasswordView.as_view(), name='zentyal-reset-password'),
