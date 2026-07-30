@@ -2967,3 +2967,204 @@ RDN (mis. display name yang mengandung koma) di-escape pakai
 `ldap3.utils.dn.escape_rdn()` (escape DN, BEDA dari escape filter LDAP
 biasa yg sudah dipakai di tempat lain). Group baru dibuat sbg security
 group global biasa (`groupType=-2147483646`, jenis paling umum).
+
+### 31.4. Zentyal (Mail Server) — LDAP (Users/Groups) & Mail API (Flask)
+
+#### 31.4.1. LDAP — Users & Groups
+
+Schema Zentyal 3.4 (mail backend **Courier**, BUKAN Postfix/Dovecot spt
+umumnya) — user pakai `posixAccount` + `inetOrgPerson` + `usereboxmail`
+(AUXILIARY, nambah `mailHomeDirectory`); group py **2 JENIS BEDA
+STRUKTUR**: `posixGroup` (atribut `memberUid`, isinya STRING uid, BUKAN
+DN) utk group keamanan biasa, `zentyalDistributionGroup` (atribut
+`member`, isinya DN LENGKAP spt `groupOfNames`) utk mailing-list. Fungsi
+`_group_kind()` deteksi otomatis JENIS group berdasarkan `objectClass`-nya,
+supaya endpoint kelola-member tahu atribut mana yg harus dipakai
+(`memberUid` vs `member`) tanpa admin perlu pilih manual.
+
+Reset password Zentyal pakai RFC 3062 (`extended.standard.modify_password`)
+— **TIDAK perlu SSL** (BEDA dari AD yg wajib SSL utk `unicodePwd`).
+
+**Tambah User** — `uidNumber` dihitung OTOMATIS (`_next_available_number()`:
+query SEMUA user yg ada, ambil nilai MAX, +1 — LDAP TIDAK PUNYA
+auto-increment bawaan spt SQL). `gidNumber` PAKAI DEFAULT yang
+dikonfigurasi admin (`ZENTYAL_DEFAULT_GID_NUMBER`, BUKAN dihitung) krn
+grup Unix dipakai BERSAMA banyak user, beda konsep dari uidNumber yg
+unik per-user. **Tambah Group** — `posixGroup` biasa, `gidNumber` dihitung
+dgn cara YANG SAMA (MAX+1).
+
+**2 bug ditemukan & diperbaiki saat testing produksi** (bukan cuma
+mock, langsung ketahuan dari error server sungguhan):
+1. **Filter LDAP malformed** — `_next_available_number()` sempat susun
+   filter jadi `(objectClass=posixAccount=uidNumber=*)` (TIGA tanda `=`
+   ditumpuk jadi 1 klausa, BUKAN filter valid) alih-alih
+   `(&(objectClass=posixAccount)(uidNumber=*))` yg benar. Akibatnya
+   pencarian SELALU kosong, `uidNumber`/`gidNumber` SELALU jatuh ke nilai
+   awal (`start_from`), bukan increment sungguhan — ketahuan dari hasil
+   test (harusnya 2011, ternyata selalu 2000).
+2. **`objectClassViolation: no structural object class provided`** saat
+   bikin group — versi awal kirim `objectClass=['posixGroup']` TANPA
+   `top` (beda dari versi AD yg SUDAH benar sertakan `top`). Setelah
+   `top` ditambah, User BERHASIL tapi Group **MASIH** error yg SAMA —
+   ternyata di schema OpenLDAP milik user, `posixGroup` BUKAN structural
+   class (beda dari standar RFC 2307 yg jadi asumsi awal), perlu
+   dikombinasikan dgn structural class LAIN. **Solusi akhir (ditemukan
+   user sendiri lewat trial di server produksi)**: pakai
+   `zentyalDistributionGroup` sbg structural class utk group baru,
+   BUKAN `top` polos. **Pelajaran**: kalau `objectClassViolation` masih
+   muncul walau `top` sudah disertakan, cara PALING CEPAT & PASTI adalah
+   intip `objectClass` dari 1 entry SEJENIS yg SUDAH ADA & berfungsi di
+   server itu (lewat `ldapsearch` atau shell Django), BUKAN menebak
+   berdasarkan standar RFC generik — schema tiap instalasi LDAP BISA
+   dikustomisasi beda dari standarnya.
+
+#### 31.4.2. Mail API (Flask, Python 2.7) — Mail Queue/Log/Transport
+
+App Flask TERPISAH (`test/zentyalmail_v2.py`) jalan LANGSUNG di server
+mail (Python 2.7 keras, versi OS lama, TIDAK BISA diupgrade) — Django
+proxy lewat HTTP+JSON biasa (`netmgmt/zentyal_mail_view.py`).
+
+**Review keamanan versi ASLI menemukan celah SERIUS**:
+- **Shell injection** — parameter dari request (`qid`/`sender`/`email`/
+  `domain`) masuk LANGSUNG ke `subprocess` dgn `shell=True` TANPA
+  validasi sama sekali — siapa pun yg bisa akses endpoint bisa eksekusi
+  command shell SEMBARANG di server mail.
+- **SQL injection** — query mail log pakai string formatting langsung,
+  bukan parameterized query.
+- **TIDAK ADA autentikasi sama sekali** — endpoint destruktif (hapus
+  mail queue) bisa dipanggil siapa saja yg bisa akses jaringannya.
+- Kredensial DB hardcode di source code, `debug=True` + listen
+  `0.0.0.0` (Werkzeug debugger BISA dieksploitasi jadi RCE kalau begini).
+
+**Perbaikan**: validasi input KETAT (regex whitelist, mis. Queue ID
+cuma boleh alfanumerik) + `pipes.quote()` sbg lapis kedua sebelum masuk
+shell — diuji lawan 6 simulasi serangan (`; rm -rf`, backtick, `$()`,
+dst), SEMUA berhasil diblokir. Query SQL diparameterisasi. Autentikasi
+token via header `X-API-Token` (opsional tapi SANGAT disarankan,
+`NETWATCH_WEBHOOK_TOKEN`-style pattern). Kredensial & config pindah ke
+environment variable. `debug` default `False`.
+
+**Bug kompatibilitas ditemukan LANGSUNG dari produksi**: `request.get_json()`
+TERNYATA TIDAK ADA di versi Flask/Werkzeug yang terpasang di server
+Python 2.7 itu (`AttributeError`). Diperbaiki dgn fallback berlapis:
+coba `get_json()` -> coba property `.json` -> fallback manual
+`json.loads(request.get_data())` — cara PALING DASAR yg pasti ada di
+SEMUA versi Werkzeug.
+
+**Fitur**: Mail Queue (indikator Total/Active/Deferred — dihitung dari
+SELURUH queue SEBELUM dipaginasi/difilter, angka GLOBAL yg tidak
+berubah tergantung halaman/pencarian aktif; requeue/delete per pesan;
+hapus SEMUA pesan dari 1 sender sekaligus), Today's Log, Mail Log
+(query histori dari DB Zentyal), Transport Map (edit SEMUA baris
+sekaligus "Simpan Semua" — **SENGAJA TIDAK dipaginasi**, krn kalau
+dipaginasi baris di halaman LAIN akan HILANG saat disimpan), Blocked
+Senders (append-only), IMAP/SASL Logs (filter waktu menit/jam/hari).
+
+**Live update Mail Queue** — task Celery Beat `check_mailq` (default
+tiap 10 detik) panggil Flask API, broadcast `wsinfo('netmgmt', 'mailq', ...)`
+— frontend dengar & `router.refresh()` (BUKAN kelola state list sendiri
+di client, beda dari Netwatch — krn di sini masih ada Django+pagination
+server-side di tengah, refresh cukup & lebih simpel drpd duplikasi
+logic pagination). Indikator jumlah "Active Queue" jg tampil global di
+Topbar.
+
+### 31.5. VMware (vCenter 7.0) — Arsitektur HYBRID: Next.js + Django
+
+**Keputusan arsitektur SENGAJA beda dari modul lain**: List Host/VM
+Guest (data ringkas) diminta dibangun **MURNI di Next.js** (bukan
+proxy Django), panggil REST API vCenter LANGSUNG dari server Next.js
+(`src/lib/vsphere-client.ts`) — API v4 lama (`/rest/vcenter/...`), sesi
+di-cache di memori (BUKAN re-login tiap request), auto re-login sekali
+kalau dapat 401 (sesi kedaluwarsa). Pakai Node `https` NATIVE (BUKAN
+`fetch()` biasa) krn vCenter on-prem HAMPIR SELALU sertifikat
+self-signed, & `fetch()`/undici tidak py cara simpel+stabil lintas versi
+Node utk terima sertifikat begini per-request, sedangkan opsi
+`rejectUnauthorized` di `https.request()` SANGAT stabil (API lawas, tak
+berubah antar versi Node).
+
+**Kenapa detail per-VM (guest OS/IP/tools status + disk/datastore)
+JUSTRU pindah ke Django, pakai SOAP (pyVmomi) bukan REST**: user
+bertanya "kenapa tidak bisa sekali jalan" — REST API vCenter SENGAJA
+"kurus" per-endpoint (hardware summary/guest identity/disk/dst SEMUA
+request TERPISAH, 4-5+ call per VM utk detail lengkap), sedangkan SOAP
+API py `PropertyCollector` yg bisa ambil BANYAK property SEKALIGUS
+dalam SATU round-trip. **Rekomendasi**: pakai Django+pyVmomi (SDK resmi
+VMware, jauh lebih matang & terdokumentasi drpd opsi SOAP utk Node.js)
+KHUSUS utk kebutuhan detail-banyak-property ini, List tetap di Next.js
+(sudah cukup & sederhana utk itu, tidak diganti).
+
+Implementasi: `_collect_vm_properties()` ambil 11 property VM sekaligus
+(nama, power state, guest OS/IP/hostname/tools status, CPU, memory,
+daftar device, daftar datastore) dlm 1 round-trip; disk difilter dari
+daftar device (`isinstance(device, vim.vm.device.VirtualDisk)`, device
+lain mis. network adapter dilewati); `_collect_datastore_summaries()`
+ambil summary SEMUA datastore yg dipakai VM itu (jg 1 round-trip meski
+py beberapa datastore) — total cuma **2 round-trip** utk semua detail,
+drpd 4-5+ ala REST.
+
+**Cerita penanganan SSL self-signed vCenter (koreksi 2x)**: percobaan
+PERTAMA pakai `disableSslCertValidation=True` gagal dgn
+`CERTIFICATE_VERIFY_FAILED`. Diperbaiki (dugaan) dgn bangun
+`ssl.SSLContext` EKSPLISIT (`verify_mode=CERT_NONE`) — **TERNYATA TIDAK
+MEMBANTU**, error SAMA tetap muncul. User coba SENDIRI versi PALING
+SEDERHANA (`disableSslCertValidation=True` SAJA, TANPA `sslContext`
+eksplisit) — **BERHASIL**. SSLContext eksplisit DIBATALKAN, dikembalikan
+ke versi sederhana yg TERBUKTI jalan. **Akar masalah SEBENARNYA**
+(ditemukan belakangan): baris `VMWARE_ALLOW_SELF_SIGNED_CERT=True` di
+`.env` py **komentar di baris yang sama** (`True  # komentar`) —
+`django-environ` (`env.bool()`) TERNYATA ikut memasukkan komentar itu
+sbg bagian dari nilai, bikin hasil parsing jadi `False`. **Pelajaran
+GANDA**: (1) jangan taruh komentar inline di baris `.env` utk nilai
+boolean, (2) kalau perbaikan "yg lebih canggih" tidak menyelesaikan
+masalah sementara versi PALING SEDERHANA justru jalan, percaya BUKTI
+EMPIRIS drpd terus menambah kompleksitas berdasarkan dugaan.
+
+**Remote Guest (VMRC)** — endpoint ambil tiket console
+(`POST /rest/vcenter/vm/{vm}/console/tickets`), lalu SEHARUSNYA disusun
+jadi URI `vmrc://clone:<ticket>@<host>/?moid=<vm>`. **Bug ditemukan dari
+error produksi**: field `ticket` yg dikembalikan vCenter TERNYATA SUDAH
+berupa string mirip URI vmrc LENGKAP SENDIRI (sudah termasuk host &
+`?moid=...`), cuma skemanya `vmrc//` (kurang 1 titik dua) — kode
+SEBELUMNYA membungkusnya LAGI dgn host/moid sendiri, hasilnya
+duplikat & URI tidak valid. Diperbaiki: deteksi bentuk ticket dulu,
+kalau SUDAH lengkap cuma perbaiki skemanya, JANGAN tambah host/moid
+sendiri lagi.
+
+**Reboot** — `power/reset` = HARD reset (setara tombol reset fisik),
+BUKAN restart OS yg rapi — dialog konfirmasi WAJIB jelaskan ini.
+
+**Pagination/sort/search halaman List** — krn TANPA Django, dibangun
+versi TypeScript sendiri (`src/lib/list-utils.ts`) yg SENGAJA disamakan
+bentuk output-nya dgn Django punya, supaya bisa reuse komponen UI yg
+sama — TAPI sempat kena bug nama-parameter yg SUDAH dijelaskan di 31.1
+(baca `_q`/`_page` Django, bukan `q`/`page` yg sungguh ditulis komponen
+UI ke URL browser).
+
+### 31.6. Cloudflare DNS
+
+Beda dari VMware, modul ini SENGAJA dibangun konsisten pakai pola Django
+(kredensial terenkripsi, proxy generik) — ditanyakan eksplisit ke user
+sebelum mulai (VMware murni Next.js vs Django spt modul lain), dipilih
+Django utk konsistensi arsitektur.
+
+API v4 Cloudflare (`https://api.cloudflare.com/client/v4`), autentikasi
+API Token (Bearer, scope bisa dibatasi per-zone di dashboard Cloudflare)
+— BUKAN Global API Key lama (akses semua zone tanpa batas, kurang
+aman). **Cloudflare API SENDIRI sudah py pagination** (`page`/`per_page`),
+TAPI supaya konsisten dgn konvensi netmgmt lain & reuse komponen UI yg
+sama, SEMUA hasil diambil dulu (`_fetch_all_pages()`, loop otomatis
+kalau Cloudflare py lebih dari 1 halaman), BARU pagination/sort/filter
+KITA SENDIRI diterapkan di atasnya (pola SAMA dgn Zentyal Mail API).
+
+**Detail penting**: respons Cloudflare SELALU py bentuk
+`{"success": bool, "errors": [...], "result": ...}` — **BISA balas HTTP
+200 TAPI `success: false`** (mis. konten record tidak valid) — kalau
+cuma cek status code HTTP, error semacam ini AKAN LOLOS tanpa
+terdeteksi. Helper `call_cloudflare_api()` SELALU cek field `success`
+ini secara eksplisit, bukan cuma andalkan status code.
+
+Tipe record yg didukung: A, AAAA, CNAME, MX, TXT, NS (set paling umum,
+gampang ditambah SRV/CAA/dst nanti). Toggle "Proxy lewat Cloudflare"
+(ikon awan oranye, lalu lintas lewat CDN/proteksi Cloudflare) CUMA
+berlaku utk record yg menunjuk ke alamat/host (A/AAAA/CNAME), TIDAK utk
+MX/TXT/NS.
