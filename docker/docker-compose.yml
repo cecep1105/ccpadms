@@ -158,12 +158,26 @@ services:
       - "8100:8000"
 
   django-celery:
-    # build:
-    #   context: ..
-    #   dockerfile: docker/django/Dockerfile
     image: adms-django-web
     restart: unless-stopped
     command: ["celery", "-A", "config", "worker", "--loglevel=info", "--concurrency=2"]
+    environment:
+      <<: *django-env
+      RUN_MIGRATIONS: "false"  # WAJIB false -- migrate cukup dari django-web, lihat komentar di atas
+    volumes:
+      - ..:/app
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      django-web:
+        condition: service_healthy  # tunggu migrate/collectstatic BENERAN selesai (lihat healthcheck django-web)
+
+  django-celery-beat:
+    image: adms-django-web
+    restart: unless-stopped
+    command: ["celery", "-A", "config", "beat", "--loglevel=info", "--concurrency=2"]
     environment:
       <<: *django-env
       RUN_MIGRATIONS: "false"  # WAJIB false -- migrate cukup dari django-web, lihat komentar di atas
