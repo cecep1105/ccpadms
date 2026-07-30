@@ -14,7 +14,7 @@ Scope detail yang diambil (sesuai kebutuhan yang diminta): guest OS/IP/
 hostname/tools status + disk & datastore usage -- BUKAN network adapter/
 port group (di luar scope saat ini, gampang ditambah nanti kalau perlu).
 """
-import ssl  # WAJIB -- dipakai bangun SSLContext eksplisit di get_vmware_connection() (lihat catatan di sana knp disableSslCertValidation saja tidak cukup andal)
+import ssl  # noqa: F401 -- TIDAK dipakai lagi saat ini (lihat catatan di get_vmware_connection() -- sslContext eksplisit sempat dicoba, TIDAK membantu, dikembalikan ke disableSslCertValidation saja), disimpan sbg referensi kalau nanti perlu didiagnosis lagi
 
 from django.conf import settings
 from pyVim.connect import Disconnect, SmartConnect
@@ -50,30 +50,23 @@ def get_vmware_connection():
     except NetmgmtCryptoError as exc:
         raise VMwareConnectionError(str(exc)) from exc
 
-    # PENTING (koreksi dari versi sebelumnya): parameter bawaan pyVmomi
-    # `disableSslCertValidation=True` TERNYATA TIDAK SELALU ANDAL menonaktifkan
-    # verifikasi sertifikat di semua versi Python/pyVmomi -- dikonfirmasi
-    # LANGSUNG dari error produksi ("[SSL: CERTIFICATE_VERIFY_FAILED]
-    # unable to get local issuer certificate") MESKI flag itu sudah di-set.
-    # Ini masalah yang cukup dikenal di komunitas pyVmomi. Solusi yang
-    # lebih ANDAL (dipakai contoh resmi VMware & komunitas): bangun
-    # ssl.SSLContext EKSPLISIT dgn verify_mode=CERT_NONE, teruskan lewat
-    # parameter `sslContext` -- BUKAN cuma mengandalkan flag saja.
-    ssl_context = None
-    if settings.VMWARE_ALLOW_SELF_SIGNED_CERT:
-        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
-
+    # CATATAN (koreksi LAGI dari percobaan sebelumnya): sempat dicoba
+    # bangun ssl.SSLContext EKSPLISIT & teruskan lewat parameter
+    # `sslContext` (dugaan disableSslCertValidation saja tidak cukup) --
+    # TERNYATA itu TIDAK MEMPERBAIKI apa pun, error SSL yang SAMA tetap
+    # muncul. Dikonfirmasi LANGSUNG lewat testing produksi: meneruskan
+    # `disableSslCertValidation=True` SAJA (TANPA parameter `sslContext`
+    # sama sekali) TERBUKTI BEKERJA -- kemungkinan besar akar masalah
+    # SEBENARNYA ada di nilai `settings.VMWARE_ALLOW_SELF_SIGNED_CERT`
+    # yang tidak ter-set True spt yg diharapkan (BUKAN soal API pyVmomi-
+    # nya) -- kalau masih gagal lagi SETELAH ini, cek dgn:
+    #     python manage.py shell -c "from django.conf import settings; print(settings.VMWARE_ALLOW_SELF_SIGNED_CERT)"
+    # WAJIB tercetak True.
     try:
         si = SmartConnect(
             host=settings.VMWARE_HOST,
             user=settings.VMWARE_USER,
             pwd=password,
-            sslContext=ssl_context,
-            # Tetap disertakan sbg lapis kedua/fallback (TIDAK merugikan
-            # kalau sslContext di atas sudah menangani -- beberapa jalur
-            # kode internal pyVmomi masih mengecek flag ini jg).
             disableSslCertValidation=settings.VMWARE_ALLOW_SELF_SIGNED_CERT,
         )
     except Exception as exc:  # noqa: BLE001
