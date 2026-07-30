@@ -337,7 +337,7 @@ class ZentyalUserCreateView(APIView):
                 if email:
                     attributes['mail'] = email
 
-                client.add_entry(user_dn, ['inetOrgPerson', 'posixAccount', 'usereboxmail'], attributes)
+                client.add_entry(user_dn, ['top', 'inetOrgPerson', 'posixAccount', 'usereboxmail'], attributes)
                 try:
                     client.set_password(user_dn, password, use_ad_method=False)
                 except LDAPManagementError as exc:
@@ -380,7 +380,7 @@ class ZentyalGroupCreateView(APIView):
                 if description:
                     attributes['description'] = description
 
-                client.add_entry(group_dn, ['posixGroup'], attributes)
+                client.add_entry(group_dn, ['zentyalDistributionGroup', 'posixGroup'], attributes)
         except LDAPManagementError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
