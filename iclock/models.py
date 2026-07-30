@@ -341,6 +341,15 @@ class RegisteredDevice(models.Model):
     def __str__(self):
         return self.DeviceName or self.SN
 
+    def DeptName(self) -> str:
+        """
+        Nama Pool/Dept device ini (traversal FK `DeptID` -> `department.DeptName`)
+        -- dipakai mis. dropdown pilihan router (netmgmt/router_choices_view.py,
+        label "<nama dept> - <IP router>") supaya tidak perlu tulis
+        `device.DeptID.DeptName` berulang di banyak tempat.
+        """
+        return self.DeptID.DeptName if self.DeptID_id else ''
+
     # Cache read-through -- padanan `getNewDevice(sn)` legacy (lihat catatan
     # cache di model `iclock` di atas). Cache key TERPISAH dari `iclock`
     # (prefix beda) supaya SN yang sama tidak tabrakan antar 2 tabel ini.

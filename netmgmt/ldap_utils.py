@@ -213,6 +213,17 @@ class LDAPManagementClient:
         except LDAPException as exc:
             raise LDAPManagementError(f'Modify atribut {attribute} gagal: {exc}') from exc
 
+    def delete_entry(self, dn: str) -> None:
+        """Hapus 1 entry LDAP SELURUHNYA (user/group/dst) -- PERMANEN, tidak ada undo. Dipakai mis. Hapus User Zentyal."""
+        if not self._connection:
+            raise LDAPManagementError('Koneksi belum dibuka -- pakai dgn `with LDAPManagementClient(...) as client:`.')
+        try:
+            ok = self._connection.delete(dn)
+            if not ok:
+                raise LDAPManagementError(f'Gagal menghapus entry LDAP: {self._connection.result}')
+        except LDAPException as exc:
+            raise LDAPManagementError(f'Gagal menghapus entry LDAP: {exc}') from exc
+
     @staticmethod
     def escape(value: str) -> str:
         """Escape karakter spesial LDAP filter (mis. dari input pencarian user) -- WAJIB dipakai tiap kali nilai dari user masuk ke search_filter, cegah LDAP injection."""

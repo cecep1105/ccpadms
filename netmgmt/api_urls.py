@@ -13,6 +13,7 @@ from .active_directory_view import (
     ADUserToggleStatusView,
     ADUserUnlockView,
 )
+from .router_choices_view import RouterChoicesView, RouterDefaultView
 from .routeros_api_view import RouterOSCommandView
 from .routeros_firewall_view import FirewallGrantAccessView
 from .routeros_netwatch_webhook_view import NetwatchSummaryView, NetwatchWebhookView
@@ -38,7 +39,9 @@ from .zentyal_view import (
     ZentyalGroupMembershipView,
     ZentyalResetPasswordView,
     ZentyalUserCreateView,
+    ZentyalUserDeleteView,
     ZentyalUserListView,
+    ZentyalUserToggleStatusView,
 )
 
 app_name = 'netmgmt_api'
@@ -61,6 +64,8 @@ urlpatterns = [
     # generik di bawahnya -- route generik pakai <path:command> yang
     # GREEDY (nangkep APA PUN termasuk "firewall/grant-access"), Django
     # coba pattern SESUAI URUTAN, jadi yang LEBIH SPESIFIK harus duluan.
+    path('router-choices/', RouterChoicesView.as_view(), name='router-choices'),
+    path('router-default/', RouterDefaultView.as_view(), name='router-default'),
     path('routeros/<str:host>/firewall/grant-access/', FirewallGrantAccessView.as_view(), name='routeros-firewall-grant-access'),
     path('routeros/<str:host>/<path:command>/', RouterOSCommandView.as_view(), name='routeros-command'),
 
@@ -84,6 +89,8 @@ urlpatterns = [
     # --- Zentyal LDAP (mail server) -- lihat netmgmt/zentyal_view.py ---
     path('zentyal/users/', ZentyalUserListView.as_view(), name='zentyal-users'),
     path('zentyal/users/create/', ZentyalUserCreateView.as_view(), name='zentyal-user-create'),
+    path('zentyal/users/toggle-status/', ZentyalUserToggleStatusView.as_view(), name='zentyal-user-toggle-status'),
+    path('zentyal/users/delete/', ZentyalUserDeleteView.as_view(), name='zentyal-user-delete'),
     path('zentyal/groups/', ZentyalGroupListView.as_view(), name='zentyal-groups'),
     path('zentyal/groups/create/', ZentyalGroupCreateView.as_view(), name='zentyal-group-create'),
     path('zentyal/groups/<path:group_dn>/members/', ZentyalGroupMembersView.as_view(), name='zentyal-group-members'),

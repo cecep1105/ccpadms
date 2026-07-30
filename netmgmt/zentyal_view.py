@@ -71,6 +71,18 @@ def _attr(entry: dict, name: str, default=''):
 
 
 def _user_to_dict(entry: dict) -> dict:
+    # Zentyal/POSIX TIDAK PUNYA bit "account disabled" spt AD
+    # (userAccountControl) -- konvensi Unix/LDAP standar (SAMA dgn
+    # `passwd -l`) yg dipakai di sini: prefix '!' di depan hash
+    # `userPassword` bikin autentikasi (LDAP bind/IMAP/SMTP auth) GAGAL
+    # tanpa mengubah hash aslinya -- REVERSIBLE (lepas prefix utk
+    # enable lagi), lihat ZentyalUserToggleStatusView. userPassword
+    # KADANG tidak terbaca (tergantung ACL server) -- kalau begitu,
+    # ASUMSIKAN aktif (fail-open utk TAMPILAN saja, BUKAN keamanan --
+    # data sesungguhnya tetap di server, ini cuma soal apa yg
+    # ditampilkan kalau atributnya memang tidak bisa dibaca).
+    user_password = _attr(entry, 'userPassword', '')
+    is_enabled = not str(user_password).startswith('!')
     return {
         'dn': entry.get('dn', ''),
         'username': _attr(entry, 'uid'),
@@ -79,6 +91,7 @@ def _user_to_dict(entry: dict) -> dict:
         'uid_number': _attr(entry, 'uidNumber'),
         'gid_number': _attr(entry, 'gidNumber'),
         'home_directory': _attr(entry, 'homeDirectory'),
+        'is_enabled': is_enabled,
     }
 
 
@@ -115,7 +128,7 @@ class ZentyalUserListView(APIView):
                 rows = client.search(
                     settings.ZENTYAL_USER_BASE_DN,
                     '(objectClass=posixAccount)',
-                    attributes=['uid', 'cn', 'displayName', 'mail', 'uidNumber', 'gidNumber', 'homeDirectory'],
+                    attributes=['uid', 'cn', 'displayName', 'mail', 'uidNumber', 'gidNumber', 'homeDirectory', 'userPassword'],
                 )
         except LDAPManagementError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
@@ -385,3 +398,55 @@ class ZentyalGroupCreateView(APIView):
             return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
         return Response({'success': True, 'message': 'Group berhasil dibuat.', 'dn': group_dn, 'gid_number': gid_number}, status=status.HTTP_201_CREATED)
+
+
+class ZentyalUserToggleStatusView(APIView):
+    """
+    POST /api/v1/netmgmt/zentyal/users/toggle-status/
+    Body: {"user_dn": "...", "action": "enable"|"disable"}
+
+    Zentyal/POSIX TIDAK PUNYA bit "disabled" spt AD -- pakai konvensi
+    Unix standar (SAMA dgn `passwd -l`): prefix '!' di depan hash
+    `userPassword` bikin autentikasi GAGAL tanpa mengubah hash asli
+    (REVERSIBLE, lihat _user_to_dict() utk detail lengkap).
+    """
+    permission_classes = [IsAuthenticated, IsStaffRole]
+
+    def post(self, request):
+        user_dn = request.data.get('user_dn')
+        action = request.data.get('action')
+        if not user_dn or action not in ('enable', 'disable'):
+            return Response({'error': "Wajib isi 'user_dn' dan 'action' ('enable' atau 'disable')."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            with _get_zentyal_client() as client:
+                current_password = client.get_attribute(user_dn, 'userPassword')
+                current_password = str(current_password or '')
+                if action == 'disable':
+                    new_password = current_password if current_password.startswith('!') else f'!{current_password}'
+                else:
+                    new_password = current_password[1:] if current_password.startswith('!') else current_password
+                client.replace_attribute(user_dn, 'userPassword', new_password)
+        except LDAPManagementError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        message = 'User berhasil dinonaktifkan.' if action == 'disable' else 'User berhasil diaktifkan.'
+        return Response({'success': True, 'message': message}, status=status.HTTP_200_OK)
+
+
+class ZentyalUserDeleteView(APIView):
+    """POST /api/v1/netmgmt/zentyal/users/delete/ -- Body: {"user_dn": "..."}. Hapus entry LDAP PERMANEN, tidak ada undo."""
+    permission_classes = [IsAuthenticated, IsStaffRole]
+
+    def post(self, request):
+        user_dn = request.data.get('user_dn')
+        if not user_dn:
+            return Response({'error': "'user_dn' wajib diisi."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            with _get_zentyal_client() as client:
+                client.delete_entry(user_dn)
+        except LDAPManagementError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        return Response({'success': True, 'message': 'User berhasil dihapus.'}, status=status.HTTP_200_OK)
