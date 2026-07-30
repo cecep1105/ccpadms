@@ -2891,3 +2891,79 @@ disalin balik (bukan input valid utk `.add()`).
 **Indikator global (Topbar)** — jumlah host `down` ditampilkan sbg badge
 di Topbar (sejajar tombol dark/light theme, lihat 31.5 utk detail
 arsitektur WebSocket-nya), klik langsung ke halaman Netwatch.
+
+### 31.3. Active Directory
+
+**Users & Groups (dasar)** — list (baca) + kelola keanggotaan group
+(tambah/hapus member). Password AD (`unicodePwd`, format UTF-16-LE)
+**WAJIB koneksi SSL/TLS** (`AD_USE_SSL=True`) — batasan dari AD sendiri,
+bukan pilihan desain; kalau SSL mati, reset password/set password baru
+akan gagal dgn pesan jelas (bukan silent failure).
+
+**Enable/Disable (toggle status)** — ubah bit `ACCOUNTDISABLE` (nilai 2)
+di `userAccountControl`. **PENTING**: ini operasi READ-MODIFY-WRITE
+(baca nilai SAAT INI dulu, ubah CUMA bit yang relevan, simpan kembali) —
+bit LAIN di bitmask itu (mis. `DONT_EXPIRE_PASSWORD`) **TIDAK BOLEH**
+ikut berubah. Diuji eksplisit dgn user yg py bit tambahan di UAC-nya,
+konfirmasi bit itu tetap utuh setelah toggle.
+
+**Locked Users** — user yang terkunci OTOMATIS (`lockoutTime` != 0, krn
+salah password berkali-kali) — status ini **BEDA & TIDAK SALING
+TERKAIT** dgn Enable/Disable (bisa aktif tapi terkunci, atau nonaktif
+tapi tidak pernah terkunci). Difilter cuma tampilkan user yang terkunci
+**2 menit TERAKHIR** (`get_recently_locked_users()`, filter LDAP numerik
+`lockoutTime>=N` server-side, BUKAN fetch semua lalu filter Python) —
+tanpa filter ini, user yg terkunci BERTAHUN-TAHUN lalu (skr sudah
+otomatis lepas kunci scr efektif oleh GPO auto-unlock AD, tapi atribut
+`lockoutTime`-nya TIDAK ikut ter-reset ke 0) akan tetap muncul, padahal
+tidak relevan lagi. Konversi waktu lokal -> Windows FILETIME
+(`convert_back()`) dites AMAN lintas timezone (WIB/UTC+7 dicoba, selisih
+hasil <1 detik) krn `time.mktime()`/`datetime.now()` sama-sama pakai
+timezone SISTEM, saling membatalkan scr konsisten. Indikator jumlah user
+terkunci di Topbar di-refresh via Celery Beat (default tiap 30 detik —
+lebih rapat dari cek lain krn jendela filternya cuma 2 menit, perlu
+dicek lebih sering spy tidak ada yg "kelewat").
+
+**DNS Zones & Records** — AD-integrated DNS py **3 kemungkinan lokasi**
+zone: Forest (`DC=ForestDnsZones,...`, replikasi seluruh forest), Domain
+(`DC=DomainDnsZones,...`, replikasi 1 domain, default modern), Legacy
+(`CN=MicrosoftDNS,CN=System,...`, gaya Windows 2000). Endpoint cari
+KETIGANYA sekaligus (bukan asumsi 1 lokasi tetap). **Filter tampilan**:
+zone reverse-lookup (`*.in-addr.arpa`/`*.ip6.arpa`) & zone bawaan AD
+internal (`_msdcs.*`, `RootDNSServers`, `..TrustAnchors`) disembunyikan
+dari daftar; record yang ditampilkan/bisa dikelola dibatasi cuma **A &
+CNAME** (tipe lain, mis. SOA, tetap ADA di data TAPI tidak ditawarkan
+utk diedit lewat fitur ini).
+
+Data record disimpan AD dlm atribut `dnsRecord` (MULTI-VALUE, format
+BINARY proprietary Microsoft/MS-DNSP, BUKAN teks biasa) — codec
+encode/decode (`netmgmt/dns_codec.py`) ditulis dari nol & diuji
+round-trip utk semua tipe + di-cross-check manual byte-per-byte utk 1
+hasil. **Kasus round-robin** (2+ record nama+tipe SAMA dlm 1 node, mis.
+2 A record buat 1 hostname) ditangani dgn benar — 1 "record" diidentifikasi
+lewat bytes MENTAH-nya sendiri (`raw_b64`), BUKAN cuma nama+tipe, supaya
+edit/hapus 1 record TIDAK mengganggu record lain yg kebetulan nama+tipe-nya
+sama. **Bug ditemukan & diperbaiki saat testing**: atribut `dc` (nama
+zone/node) dari ldap3 ternyata DIKEMBALIKAN SBG LIST (`['nama']`), bukan
+string polos — kalau tidak dibongkar, nama zone/record salah tampil di
+frontend.
+
+**Tambah User & Group** — bikin user AD BUKAN 1 langkah spt SQL INSERT
+biasa:
+1. `add()` entry BARU dgn `userAccountControl=514` (512 NORMAL_ACCOUNT
+   + 2 ACCOUNTDISABLE, dijumlah bitwise OR) — AD MENOLAK bikin akun
+   langsung aktif tanpa password.
+2. Set password (`unicodePwd`, SAMA method & batasan SSL spt Reset
+   Password di atas).
+3. **Kalau password berhasil**, `userAccountControl` diubah jadi `512`
+   (aktif). **Kalau password gagal** (mis. tidak memenuhi kebijakan
+   password AD), langkah ini TIDAK dijalankan — user TETAP tersimpan
+   tapi nonaktif, pesan error menjelaskan situasinya (bukan silent
+   failure / bukan juga akun aktif tanpa password valid).
+
+`userPrincipalName` (`username@domain`) disusun otomatis dari
+`AD_BASE_DN` (`DC=contoso,DC=com` -> `contoso.com`). Nilai yang masuk ke
+RDN (mis. display name yang mengandung koma) di-escape pakai
+`ldap3.utils.dn.escape_rdn()` (escape DN, BEDA dari escape filter LDAP
+biasa yg sudah dipakai di tempat lain). Group baru dibuat sbg security
+group global biasa (`groupType=-2147483646`, jenis paling umum).
