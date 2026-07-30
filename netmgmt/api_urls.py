@@ -16,6 +16,7 @@ from .active_directory_view import (
 from .routeros_api_view import RouterOSCommandView
 from .routeros_firewall_view import FirewallGrantAccessView
 from .routeros_netwatch_webhook_view import NetwatchSummaryView, NetwatchWebhookView
+from .cloudflare_view import CloudflareDnsRecordActionView, CloudflareDnsRecordListView, CloudflareZoneListView
 from .vmware_view import VMwareVmDetailView
 from .zentyal_mail_view import (
     ZentyalMailBlockSendersView,
@@ -104,4 +105,9 @@ urlpatterns = [
 
     # --- VMware vCenter (SOAP/pyVmomi, detail per-VM) -- lihat netmgmt/vmware_view.py ---
     path('vmware/vm-detail/', VMwareVmDetailView.as_view(), name='vmware-vm-detail'),
+
+    # --- Cloudflare DNS -- lihat netmgmt/cloudflare_view.py ---
+    path('cloudflare/zones/', CloudflareZoneListView.as_view(), name='cloudflare-zones'),
+    path('cloudflare/zones/<str:zone_id>/records/', CloudflareDnsRecordListView.as_view(), name='cloudflare-dns-records'),
+    path('cloudflare/zones/<str:zone_id>/records/action/', CloudflareDnsRecordActionView.as_view(), name='cloudflare-dns-record-action'),
 ]

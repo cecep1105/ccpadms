@@ -581,3 +581,11 @@ VMWARE_PASSWORD_ENCRYPTED = env('VMWARE_PASSWORD_ENCRYPTED', default='')
 # TAPI ini pengaturan TERPISAH krn koneksi SOAP (pyVmomi, dari Django) &
 # REST (dari Next.js) adalah 2 KONEKSI BERBEDA meski ke server yang sama.
 VMWARE_ALLOW_SELF_SIGNED_CERT = env.bool('VMWARE_ALLOW_SELF_SIGNED_CERT', default=True)
+
+# --- Cloudflare DNS (manajemen domain/record) -- lihat netmgmt/cloudflare_view.py
+# -- API v4 Cloudflare, autentikasi via API Token (Bearer), BUKAN Global
+# API Key lama (Token lebih aman -- bisa dibatasi scope-nya per-zone di
+# dashboard Cloudflare, Global Key akses semua akun tanpa batas). ---
+CLOUDFLARE_ENCRYPTION_KEY = env('CLOUDFLARE_ENCRYPTION_KEY', default='')
+CLOUDFLARE_API_TOKEN_ENCRYPTED = env('CLOUDFLARE_API_TOKEN_ENCRYPTED', default='')
+CLOUDFLARE_API_TIMEOUT = env.int('CLOUDFLARE_API_TIMEOUT', default=15)
