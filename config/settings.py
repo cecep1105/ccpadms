@@ -556,3 +556,21 @@ ZENTYAL_MAIL_ENCRYPTION_KEY = env('ZENTYAL_MAIL_ENCRYPTION_KEY', default='')
 ZENTYAL_MAIL_API_URL = env('ZENTYAL_MAIL_API_URL', default='')  # mis. 'http://mail.internal:5100'
 ZENTYAL_MAIL_API_TOKEN_ENCRYPTED = env('ZENTYAL_MAIL_API_TOKEN_ENCRYPTED', default='')
 ZENTYAL_MAIL_API_TIMEOUT = env.int('ZENTYAL_MAIL_API_TIMEOUT', default=10)
+
+# --- VMware vCenter (SOAP API via pyVmomi, BUKAN REST -- lihat
+# netmgmt/vmware_view.py) -- dipakai KHUSUS utk halaman detail per-VM
+# (guest OS/IP/tools status, disk & datastore) yang butuh BANYAK
+# property sekaligus -- REST API vCenter (dipakai Next.js utk list Host/
+# VM Guest, src/lib/vsphere-client.ts di nextadms) perlu request TERPISAH
+# per jenis detail (N+1), sedangkan SOAP PropertyCollector bisa ambil
+# semuanya dlm 1 round-trip. List Host/VM Guest TETAP di Next.js (sudah
+# jalan baik, tidak perlu diganti) -- CUMA detail per-VM yang lewat sini.
+VMWARE_ENCRYPTION_KEY = env('VMWARE_ENCRYPTION_KEY', default='')
+VMWARE_HOST = env('VMWARE_HOST', default='')
+VMWARE_USER = env('VMWARE_USER', default='')
+VMWARE_PASSWORD_ENCRYPTED = env('VMWARE_PASSWORD_ENCRYPTED', default='')
+# vCenter on-prem BIASANYA sertifikat self-signed -- SAMA pertimbangan
+# spt VSPHERE_ALLOW_SELF_SIGNED_CERT di sisi Next.js (src/lib/vsphere-client.ts),
+# TAPI ini pengaturan TERPISAH krn koneksi SOAP (pyVmomi, dari Django) &
+# REST (dari Next.js) adalah 2 KONEKSI BERBEDA meski ke server yang sama.
+VMWARE_ALLOW_SELF_SIGNED_CERT = env.bool('VMWARE_ALLOW_SELF_SIGNED_CERT', default=True)

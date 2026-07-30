@@ -61,3 +61,8 @@ RouterOS-api>=0.21.0
 # Untuk panggil API internal Zentyal Mail (Flask, Python 2.7, jalan di
 # server mail terpisah) -- lihat netmgmt/zentyal_mail_view.py & test/zentyalmail_v2.py
 requests>=2.31
+
+# Untuk detail per-VM VMware vCenter (SOAP API, PropertyCollector -- lihat
+# netmgmt/vmware_view.py). List Host/VM Guest TETAP di Next.js (REST API,
+# src/lib/vsphere-client.ts) -- pyvmomi CUMA dipakai utk halaman detail.
+pyvmomi>=8.0

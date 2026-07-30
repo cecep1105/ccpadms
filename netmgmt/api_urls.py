@@ -14,6 +14,7 @@ from .active_directory_view import (
 from .routeros_api_view import RouterOSCommandView
 from .routeros_firewall_view import FirewallGrantAccessView
 from .routeros_netwatch_webhook_view import NetwatchSummaryView, NetwatchWebhookView
+from .vmware_view import VMwareVmDetailView
 from .zentyal_mail_view import (
     ZentyalMailBlockSendersView,
     ZentyalMailControlView,
@@ -92,4 +93,7 @@ urlpatterns = [
     path('zentyal-mail/sasl-logs/', ZentyalMailSaslLogsView.as_view(), name='zentyal-mail-sasl-logs'),
     path('zentyal-mail/ip-via-email/', ZentyalMailIpViaEmailView.as_view(), name='zentyal-mail-ip-via-email'),
     path('zentyal-mail/control/', ZentyalMailControlView.as_view(), name='zentyal-mail-control'),
+
+    # --- VMware vCenter (SOAP/pyVmomi, detail per-VM) -- lihat netmgmt/vmware_view.py ---
+    path('vmware/vm-detail/', VMwareVmDetailView.as_view(), name='vmware-vm-detail'),
 ]

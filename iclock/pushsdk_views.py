@@ -251,10 +251,9 @@ def getrequest(request):
         return error_response
 
     info = request.GET.get('INFO', '')
-    if info:
-        wsinfo('iclock', 'device_request', {
-            'sn': device.SN, 'la': timezone.now().strftime('%Y-%m-%d %H:%M:%S'), 'devinfo': info,
-        })
+    wsinfo('iclock', 'device_request', {
+        'sn': device.SN, 'la': timezone.now().strftime('%Y-%m-%d %H:%M:%S'), 'devinfo': info,
+    })
 
     commands = get_pending_commands(device)
     lines = []
