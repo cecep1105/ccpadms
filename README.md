@@ -2777,3 +2777,117 @@ lokal/LAN) — taruh di `docker/nginx/certs/{fullchain,privkey}.pem`.
       DIKOSONGKAN (default: path relatif/origin browser dinamis, lihat
       README `nextadms`) — cuma isi kalau API benar-benar di origin BEDA
       dari halaman Next.js-nya sendiri.
+
+## 31. Modul `netmgmt` — Manajemen Infrastruktur IT Terpadu
+
+> **Catatan**: dokumentasi modul ini DICICIL per-installment (sesuai
+> permintaan) — bagian ini baru mencakup ringkasan arsitektur & Mikrotik.
+> Active Directory, Zentyal (LDAP + Mail), VMware, Cloudflare, dan
+> infrastruktur WebSocket akan menyusul di section berikutnya.
+
+App `netmgmt` menyatukan operasi harian infrastruktur IT (jaringan,
+direktori, mail server, virtualisasi, DNS publik) dalam 1 dashboard —
+BUKAN sekadar viewer, tapi juga bisa melakukan aksi tulis (tambah/edit/
+hapus record, reset password, reboot VM, dst) ke sistem eksternal
+sungguhan.
+
+### 31.1. Pola Arsitektur yang Dipakai Konsisten di Seluruh Modul
+
+**Kredensial terenkripsi per-fitur** — setiap integrasi (Mikrotik,
+Active Directory, Zentyal LDAP, Zentyal Mail, VMware, Cloudflare) py
+KEY ENKRIPSI SENDIRI-SENDIRI (Fernet, lihat `netmgmt/crypto_utils.py`) —
+BUKAN 1 key dibagi semua, supaya kebocoran/rotasi 1 key TIDAK mengekspos
+kredensial fitur lain. Tiap fitur py sepasang management command:
+`generate_<fitur>_key` (buat key baru) & `encrypt_<fitur>_<password|token>`
+(enkripsi kredensial pakai key itu, hasil disimpan di `.env`).
+
+**Proxy generik, bukan 1 endpoint per resource** — API pihak ketiga
+(RouterOS, vCenter, Cloudflare) py PULUHAN kemungkinan resource/command —
+bikin 1 Django View per resource (pola CRUD biasa) tidak praktis. Alih-
+alih itu, 1 endpoint GENERIK dgn parameter `command`/`path` yang
+diteruskan APA ADANYA ke API asli (lihat `netmgmt/routeros_api_view.py`
+sbg contoh awal, ditiru pola yg sama di modul-modul berikutnya).
+
+**Pagination/sort/search seragam, TAPI ada JEBAKAN penting soal nama
+parameter** — hampir semua halaman list di `netmgmt` pakai 1 konvensi
+yang SAMA (biar bisa reuse komponen UI `RouterOSSearchBar`/
+`RouterOSPaginationBar`/`RouterOSSortableHeader` di `nextadms`), TAPI ada
+2 LAPISAN nama parameter yang BERBEDA dan gampang tertukar:
+  - **Parameter di URL BROWSER** (ditulis komponen UI itu sendiri):
+    `q`, `page`, `page_size`, `sortBy`, `sortDir` — TANPA underscore,
+    camelCase utk sort.
+  - **Parameter yang DIKIRIM KE DJANGO** (dibangun manual di tiap
+    `page.tsx`, MENERJEMAHKAN dari param URL di atas): `_q`, `_page`,
+    `_limit`, `_sort_by`, `_order` — DENGAN underscore (konvensi internal
+    `netmgmt/list_utils.py::parse_list_params()`).
+
+  **BUG PRODUKSI YANG PERNAH TERJADI**: saat fitur VMware (Host/VM Guest)
+  dibangun TANPA Django di tengah (langsung REST API vCenter dari
+  Next.js, lihat 31.4), helper pagination versi TypeScript-nya
+  (`src/lib/list-utils.ts`) SEMPAT langsung baca nama param Django
+  (`_q`/`_page`/dst) DARI URL BROWSER — padahal URL browser pakai nama
+  TANPA underscore. Akibatnya klik search/sort/pagination di UI
+  TIDAK PERNAH berefek (selalu balik ke default), krn param yang dibaca
+  TIDAK PERNAH match apa yang sungguh ada di URL. **Pelajaran**: kalau
+  bikin halaman list BARU yang TIDAK lewat Django, helper pagination-nya
+  WAJIB baca nama param URL BROWSER (`q`/`page`/`sortBy`/`sortDir`),
+  BUKAN nama param Django.
+
+**WebSocket live update** — sebagian fitur (Mail Queue, Netwatch, AD
+Locked Users) py indikator REAL-TIME tanpa refresh manual, lewat 2
+mekanisme: (a) Celery Beat — task berkala cek status & broadcast, atau
+(b) webhook — sistem eksternal (script RouterOS) PUSH langsung ke Django
+saat event terjadi. Detail lengkap di section 31.5 (menyusul).
+
+### 31.2. Mikrotik (RouterOS)
+
+**Koneksi & proxy generik** (`netmgmt/routeros_api_view.py`) —
+`get_routeros_connection()` DIEKSTRAK jadi fungsi terpisah (dipakai
+ULANG oleh workflow LAIN yang lebih spesifik, lihat Firewall Filter di
+bawah) supaya tidak duplikasi logic konek/decrypt password. Konversi
+nama command URL-safe ke path RouterOS asli: `ip-dhcp_server-lease` ->
+`/ip/dhcp-server/lease` (aturan: `_` -> `-`, `-` -> `/`).
+
+**DHCP Lease** — list biasa (baca), tidak ada aksi tulis khusus.
+
+**Firewall Filter — "Berikan Akses Internet" (per-MAC)** — mengotomasi
+workflow manual yang biasa dikerjakan admin: (1) cari MAC address device
+dari DHCP lease berdasarkan IP, (2) buat firewall filter rule BARU
+dengan field (chain/action/protocol/dst) DISALIN dari rule yang PERSIS
+ada di posisi SEBELUM rule ber-comment `BLOCK-ELSE` (rule itu jadi
+"template", krn rule baru SELALU disisipkan di situ juga, jadi rule lama
+otomatis geser jadi "kedua terakhir", pola berantai konsisten), (3)
+`src-mac-address` & `comment` DIGANTI (bukan disalin) — comment format
+`<hostname>|<WIFI|LAN>|<nama user>`. Field STATS/read-only dari template
+(`id`/`bytes`/`packets`/`invalid`/`dynamic`) SENGAJA di-exclude saat
+disalin balik (bukan input valid utk `.add()`).
+
+**Netwatch** — py 3 lapisan:
+1. **CRUD host** (tambah/edit/hapus) — field: host, up-script,
+   down-script, comment. Lewat endpoint proxy generik yang SAMA
+   (`?postcmd=add|set|remove`), TIDAK perlu endpoint Django baru
+   (dikonfirmasi lewat testing langsung sebelum dibangun).
+2. **Live update via webhook** (`netmgmt/routeros_netwatch_webhook_view.py`,
+   endpoint `/api/v1/netmgmt/nwupdate`, TANPA trailing slash persis
+   sesuai script RouterOS) — script netwatch (up-script/down-script)
+   POST ke endpoint ini tiap kali status 1 host berubah. Endpoint
+   SENGAJA TIDAK pakai autentikasi Django biasa (session/JWT) krn
+   dipanggil RouterOS langsung (bukan browser) — proteksi lewat token
+   OPSIONAL di query string (`?token=...`, `NETWATCH_WEBHOOK_TOKEN` di
+   `.env`, kalau kosong endpoint terbuka tanpa proteksi, cukup utk
+   LAN tertutup). Payload dari RouterOS cuma berisi status 1 host yang
+   berubah, TAPI yang di-broadcast ke frontend (`wsinfo('netmgmt',
+   'netwatch', ...)`) adalah **daftar netwatch LENGKAP** (query ulang ke
+   router), bukan cuma 1 entry itu — sesuai kebutuhan tampilan real-time.
+3. **Dual view Card/List** (frontend) — data dikelola PENUH di client
+   (BEDA dari pola pagination server-side di fitur netmgmt lain) krn
+   broadcast WebSocket SELALU bawa daftar lengkap (bukan 1 halaman),
+   coba rekonsiliasi itu dgn pagination server-side jadi rumit tanpa
+   banyak manfaat (jumlah host netwatch biasanya puluhan, bukan ribuan).
+   Host berstatus `down` SELALU disortir ke atas (stable sort, urutan
+   lain dipertahankan) — supaya masalah langsung kelihatan tanpa perlu
+   scroll/cari.
+
+**Indikator global (Topbar)** — jumlah host `down` ditampilkan sbg badge
+di Topbar (sejajar tombol dark/light theme, lihat 31.5 utk detail
+arsitektur WebSocket-nya), klik langsung ke halaman Netwatch.
