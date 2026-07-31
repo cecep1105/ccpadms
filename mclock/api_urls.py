@@ -2,6 +2,7 @@ from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from .api_views import MobilePoolLocBulkSaveAPIView, MobilePoolLocViewSet, MobilePoolViewSet, PoolDeviceFunctionViewSet
+from .mobile_attendance_api_view import MobileAttendanceSourceListView, MobileAttendanceTableView
 
 app_name = 'mclock_api'
 
@@ -16,4 +17,8 @@ urlpatterns = [
     # 'mobile-pool-loc/bulk-save/<pool_id>/' krn keduanya sama-sama diawali
     # 'mobile-pool-loc/'.
     path('mobile-pool-loc/bulk-save/<str:pool_id>/', MobilePoolLocBulkSaveAPIView.as_view(), name='mobile_pool_loc_bulk_save'),
+
+    # --- Mobile Attendance (5 submenu, 1 API generik) -- lihat mclock/mobile_attendance_api_view.py ---
+    path('mobile-attendance/sources/', MobileAttendanceSourceListView.as_view(), name='mobile-attendance-sources'),
+    path('mobile-attendance/<str:slug>/', MobileAttendanceTableView.as_view(), name='mobile-attendance-table'),
 ] + router.urls
