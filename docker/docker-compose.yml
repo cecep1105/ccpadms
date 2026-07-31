@@ -221,12 +221,6 @@ services:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-}
         NEXT_PUBLIC_WS_BASE_URL: ${NEXT_PUBLIC_WS_BASE_URL:-}
         NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-}
-        VSPHERE_HOST: ${VMWARE_HOST:-}
-        VSPHERE_USER: ${VMWARE_USER:-}
-        VSPHERE_PASSWORD: ${VMWARE_PASSWORD:-}
-        VSPHERE_ALLOW_SELF_SIGNED_CERT: ${VMWARE_ALLOW_SELF_SIGNED_CERT:-}
-
-
     restart: unless-stopped
     environment:
       NEXTAUTH_SECRET: "${NEXTAUTH_SECRET:?wajib diisi di .env, generate pakai: openssl rand -base64 32}"
@@ -239,6 +233,11 @@ services:
       # akses publik (env var biasa spt ini dibaca saat RUNTIME, beda dari
       # NEXT_PUBLIC_* yang di-bake saat build).
       DJANGO_INTERNAL_URL: http://django-web:8000/api/v1
+      VSPHERE_HOST: ${VMWARE_HOST:-}
+      VSPHERE_USER: ${VMWARE_USER:-}
+      VSPHERE_PASSWORD: ${VMWARE_PASSWORD:-}
+      VSPHERE_ALLOW_SELF_SIGNED_CERT: ${VMWARE_ALLOW_SELF_SIGNED_CERT:-}
+
     depends_on:
       - django-web
 
