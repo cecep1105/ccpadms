@@ -12,7 +12,7 @@ from django.db import transaction as db_transaction
 from django.db.models import Q
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -405,13 +405,62 @@ class DeviceCommandViewSet(BaseIclockViewSet):
 # ---------------------------------------------------------------------------
 # ATTENDANCE RECAP (fitur besar: matrix PIN x tanggal) & pendukungnya
 # ---------------------------------------------------------------------------
+def _kantin_function_codes() -> list:
+    """Key settings.DEVICEFUNCTION yang value-nya PERSIS 'KANTIN' (biasanya cuma 1, key 'X') -- dipakai filter Rekap Kantin."""
+    return [code for code, desc in settings.DEVICEFUNCTION.items() if desc == 'KANTIN']
+
+
+def _driver_function_codes() -> list:
+    """Key settings.DEVICEFUNCTION yang value-nya DIAWALI 'DRIVER' (mis. 'DRIVER-HIBA', 'DRIVER-HRC', dst -- BEDA vendor/rute, tapi SEMUA dihitung 'Driver') -- dipakai filter Rekap Driver."""
+    return [code for code, desc in settings.DEVICEFUNCTION.items() if desc.startswith('DRIVER')]
+
+
+class HasAttendanceRecapPermission(BasePermission):
+    """
+    Cek permission SESUAI `recap_type` yang diminta (all/kantin/driver) --
+    BEDA dari `HasFeaturePermission` biasa (OR sederhana antar beberapa
+    permission utk 1 view) krn di sini permission yang RELEVAN tergantung
+    PARAMETER request (?recap_type=), bukan cuma view-nya. Staff/superuser
+    SELALU lolos (spt HasFeaturePermission), user non-staff HARUS py
+    permission yang PERSIS sesuai jenis rekap yang diminta -- user yang
+    cuma dikasih izin 'Rekap Kantin' TIDAK BISA akses 'Rekap Driver' atau
+    'Rekap All' dgn cara ganti parameter URL saja.
+    """
+    PERMISSION_MAP = {
+        'all': 'iclock.can_view_attendance_recap',
+        'kantin': 'iclock.can_view_attendance_recap_kantin',
+        'driver': 'iclock.can_view_attendance_recap_driver',
+    }
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not (user and user.is_authenticated):
+            return False
+        if user.is_staff or user.is_superuser:
+            return True
+        recap_type = request.query_params.get('recap_type', 'all')
+        perm = self.PERMISSION_MAP.get(recap_type, self.PERMISSION_MAP['all'])
+        return user.has_perm(perm)
+
+
 class AttendanceRecapAPIView(APIView):
     """
-    GET /api/v1/iclock/attendance-recap/?pin=&function=&pool=&device=&date_from=&date_to=&page=&page_size=
+    GET /api/v1/iclock/attendance-recap/?recap_type=all|kantin|driver&pin=&function=&pool=&device=&date_from=&date_to=&page=&page_size=
     Sama persis logic-nya dgn iclock/views.py::attendance_recap -- matrix
     PIN x tanggal berisi jam IN (paling awal)/OUT (paling akhir) per hari.
+
+    3 varian (`recap_type`, granular permission via HasAttendanceRecapPermission
+    di atas):
+    - 'all' (default): semua data, TANPA filter Function tambahan (perilaku LAMA, tidak berubah).
+    - 'kantin': HANYA transaksi yg Function-nya KANTIN (device/pool ber-function
+      KANTIN di mclock.PoolDeviceFunction -- lihat mattendance/function_utils.py
+      yg MENENTUKAN Function='X' persis krn alasan itu, jadi filter di sini
+      cukup cocokkan Function yg SUDAH tersimpan, tidak perlu join ulang).
+    - 'driver': HANYA transaksi yg Function-nya salah satu kode DRIVER-*
+      (settings.DEVICEFUNCTION yg value-nya diawali 'DRIVER' -- ada BEBERAPA
+      vendor/rute driver berbeda, kode BEDA-BEDA tapi SEMUA dihitung 'Driver').
     """
-    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_attendance_recap')]
+    permission_classes = [IsAuthenticated, HasAttendanceRecapPermission]
 
     def get(self, request):
         serializer = AttendanceRecapQuerySerializer(data=request.query_params)
@@ -426,6 +475,13 @@ class AttendanceRecapAPIView(APIView):
             d -= timedelta(days=1)
 
         base_qs = transaction.objects.filter(TTime__date__gte=date_from, TTime__date__lte=date_to)
+
+        recap_type = data.get('recap_type', 'all')
+        if recap_type == 'kantin':
+            base_qs = base_qs.filter(Function__in=_kantin_function_codes())
+        elif recap_type == 'driver':
+            base_qs = base_qs.filter(Function__in=_driver_function_codes())
+
         if data.get('pin'):
             base_qs = base_qs.filter(UserID__PIN__iregex=data['pin'])
         if data.get('function'):
@@ -494,7 +550,10 @@ class EmployeeSearchAPIView(APIView):
     'id' -- BUKAN cuma PIN -- krn endpoint transfer-finger dipanggil pakai
     PK numerik, bukan PIN).
     """
-    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_transfer_finger', 'iclock.can_view_attendance_recap')]
+    permission_classes = [IsAuthenticated, HasFeaturePermission(
+        'iclock.can_transfer_finger', 'iclock.can_view_attendance_recap',
+        'iclock.can_view_attendance_recap_kantin', 'iclock.can_view_attendance_recap_driver',
+    )]
 
     def get(self, request):
         q = request.query_params.get('q', '').strip()

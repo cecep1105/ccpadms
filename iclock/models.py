@@ -709,5 +709,7 @@ class FeaturePermission(models.Model):
         default_permissions = ()  # matikan add/change/delete/view otomatis -- kita definisikan sendiri
         permissions = [
             ('can_transfer_finger', 'Bisa melakukan Transfer Data Finger'),
-            ('can_view_attendance_recap', 'Bisa melihat Rekap Absensi (Attendance Recap)'),
+            ('can_view_attendance_recap', 'Bisa melihat Rekap Absensi - All (Attendance Recap)'),
+            ('can_view_attendance_recap_kantin', 'Bisa melihat Rekap Absensi - Kantin'),
+            ('can_view_attendance_recap_driver', 'Bisa melihat Rekap Absensi - Driver'),
         ]

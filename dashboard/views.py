@@ -229,7 +229,9 @@ def user_set_staff(request, user_id):
 # (full codename 'app_label.codename', codename saja, label buat ditampilkan)
 FEATURE_PERMISSIONS = [
     ('iclock.can_transfer_finger', 'can_transfer_finger', 'Transfer Data Finger'),
-    ('iclock.can_view_attendance_recap', 'can_view_attendance_recap', 'Rekap Absensi (Attendance Recap)'),
+    ('iclock.can_view_attendance_recap', 'can_view_attendance_recap', 'Rekap Absensi - All (Attendance Recap)'),
+    ('iclock.can_view_attendance_recap_kantin', 'can_view_attendance_recap_kantin', 'Rekap Absensi - Kantin'),
+    ('iclock.can_view_attendance_recap_driver', 'can_view_attendance_recap_driver', 'Rekap Absensi - Driver'),
 ]
 
 

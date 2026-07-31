@@ -8,6 +8,8 @@ class UserSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(read_only=True)
     can_transfer_finger = serializers.SerializerMethodField()
     can_view_attendance_recap = serializers.SerializerMethodField()
+    can_view_attendance_recap_kantin = serializers.SerializerMethodField()
+    can_view_attendance_recap_driver = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -18,14 +20,17 @@ class UserSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at',
             # Izin fitur granular utk user NON-staff (lihat
             # iclock/models.py::FeaturePermission & dashboard "Kelola Izin
-            # User") -- staff/superuser otomatis True utk keduanya (efektif
-            # selalu punya akses), dipakai frontend Next.js utk tahu kartu
-            # mana yang perlu ditampilkan di halaman non-staff.
+            # User") -- staff/superuser otomatis True utk semuanya (efektif
+            # selalu punya akses), dipakai frontend Next.js utk tahu kartu/
+            # tab mana yang perlu ditampilkan (mis. 3 tab Rekap Absensi:
+            # All/Kantin/Driver, lihat iclock/api_views.py::AttendanceRecapAPIView).
             'can_transfer_finger', 'can_view_attendance_recap',
+            'can_view_attendance_recap_kantin', 'can_view_attendance_recap_driver',
         ]
         read_only_fields = [
             'id', 'username', 'auth_source', 'is_superuser', 'created_at', 'updated_at',
             'can_transfer_finger', 'can_view_attendance_recap',
+            'can_view_attendance_recap_kantin', 'can_view_attendance_recap_driver',
         ]
 
     def get_can_transfer_finger(self, obj):
@@ -33,6 +38,12 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_can_view_attendance_recap(self, obj):
         return bool(obj.is_staff or obj.is_superuser or obj.has_perm('iclock.can_view_attendance_recap'))
+
+    def get_can_view_attendance_recap_kantin(self, obj):
+        return bool(obj.is_staff or obj.is_superuser or obj.has_perm('iclock.can_view_attendance_recap_kantin'))
+
+    def get_can_view_attendance_recap_driver(self, obj):
+        return bool(obj.is_staff or obj.is_superuser or obj.has_perm('iclock.can_view_attendance_recap_driver'))
 
 
 class LoginSerializer(serializers.Serializer):

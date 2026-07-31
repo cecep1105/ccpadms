@@ -217,6 +217,9 @@ class DeviceUserIdActionSerializer(serializers.Serializer):
 
 
 class AttendanceRecapQuerySerializer(serializers.Serializer):
+    RECAP_TYPE_CHOICES = ['all', 'kantin', 'driver']
+
+    recap_type = serializers.ChoiceField(choices=RECAP_TYPE_CHOICES, required=False, default='all')
     pin = serializers.CharField(required=False, allow_blank=True, default='')
     function = serializers.CharField(required=False, allow_blank=True, default='')
     pool = serializers.PrimaryKeyRelatedField(queryset=department.objects.all(), required=False, allow_null=True)
