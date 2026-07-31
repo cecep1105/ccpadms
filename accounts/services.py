@@ -318,6 +318,55 @@ def set_staff_role(actor, target_id, is_staff: bool):
 
 
 # ---------------------------------------------------------------------------
+# IZIN FITUR GRANULAR (utk user NON-STAFF, lihat iclock/models.py::
+# FeaturePermission) -- daftar TUNGGAL dipakai BERSAMA oleh:
+#   - dashboard/views.py::user_manage_permissions (server-rendered, Django)
+#   - api/views.py::UserViewSet.manage_permissions (JSON/REST, Next.js)
+# supaya KEDUANYA selalu sinkron, tidak ada 2 daftar terpisah yang bisa
+# beda-beda kalau salah satu lupa di-update pas nambah izin baru.
+# Format tuple: (full codename 'app_label.codename', codename saja, label).
+# ---------------------------------------------------------------------------
+FEATURE_PERMISSIONS = [
+    ('iclock.can_transfer_finger', 'can_transfer_finger', 'Transfer Data Finger'),
+    ('iclock.can_view_attendance_recap', 'can_view_attendance_recap', 'Rekap Absensi - All (Attendance Recap)'),
+    ('iclock.can_view_attendance_recap_kantin', 'can_view_attendance_recap_kantin', 'Rekap Absensi - Kantin'),
+    ('iclock.can_view_attendance_recap_driver', 'can_view_attendance_recap_driver', 'Rekap Absensi - Driver'),
+]
+
+
+def get_feature_permissions(target_id):
+    """Daftar (codename, label, sudah_dicentang) utk 1 user -- dipakai isi form/dialog "Kelola Izin"."""
+    target = get_user_or_raise(target_id)
+    return target, [
+        (codename, label, target.user_permissions.filter(codename=codename, content_type__app_label='iclock').exists())
+        for _full_codename, codename, label in FEATURE_PERMISSIONS
+    ]
+
+
+def set_feature_permissions(actor, target_id, granted_codenames: set):
+    """
+    Set izin fitur granular target user -- `granted_codenames` = set berisi
+    codename (BUKAN full 'app_label.codename') yang HARUS tercentang,
+    codename LAIN dari FEATURE_PERMISSIONS yang TIDAK ada di situ otomatis
+    DICABUT (bukan cuma nambah) -- SAMA perilaku dgn form checkbox
+    dashboard/views.py::user_manage_permissions (uncheck = cabut).
+    """
+    from django.contrib.auth.models import Permission
+
+    _require_staff(actor)
+    target = get_user_or_raise(target_id)
+    for _full_codename, codename, _label in FEATURE_PERMISSIONS:
+        perm = Permission.objects.filter(codename=codename, content_type__app_label='iclock').first()
+        if not perm:
+            continue  # migration blm dijalankan/permission blm ke-sync -- lewati diam2, JANGAN error (fitur LAIN yg permission-nya ADA harus tetap bisa di-set)
+        if codename in granted_codenames:
+            target.user_permissions.add(perm)
+        else:
+            target.user_permissions.remove(perm)
+    return target
+
+
+# ---------------------------------------------------------------------------
 # PROFIL (self-service, untuk user non-admin maupun admin)
 # ---------------------------------------------------------------------------
 PROFILE_EDITABLE_FIELDS = {'first_name', 'last_name', 'email', 'phone_number', 'department', 'title'}

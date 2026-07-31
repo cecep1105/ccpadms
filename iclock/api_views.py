@@ -584,15 +584,18 @@ class PoolDeviceChoicesAPIView(APIView):
     """
     GET /api/v1/iclock/pool-device-choices/?pool_id= -- versi RINGAN &
     READ-ONLY dari Department/ActiveDevice, KHUSUS isi dropdown Pool &
-    Device di form Transfer Finger non-staff (padanan
-    iclock/views.py::ajax_devices_by_pool dashboard Django). SENGAJA
+    Device di form Transfer Finger DAN Rekap Absensi portal non-staff
+    (padanan iclock/views.py::ajax_devices_by_pool dashboard Django). SENGAJA
     endpoint TERPISAH dari DepartmentViewSet/ActiveDeviceViewSet biasa
     (yang staff-only & expose SEMUA field termasuk IP/MAC/konfigurasi
     PUSH SDK) -- user non-staff yang cuma dikasih izin
     'can_transfer_finger' TIDAK PERLU & TIDAK SEHARUSNYA lihat detail
     device selengkap itu, cukup {id, name} sekadar buat pilihan dropdown.
     """
-    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_transfer_finger')]
+    permission_classes = [IsAuthenticated, HasFeaturePermission(
+        'iclock.can_transfer_finger', 'iclock.can_view_attendance_recap',
+        'iclock.can_view_attendance_recap_kantin', 'iclock.can_view_attendance_recap_driver',
+    )]
 
     def get(self, request):
         pools = list(department.objects.order_by('DeptName').values('DeptID', 'DeptName'))

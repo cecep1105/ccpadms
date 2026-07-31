@@ -48,10 +48,24 @@ def user_home(request):
         })
     if user.is_staff or user.is_superuser or user.has_perm('iclock.can_view_attendance_recap'):
         available_actions.append({
-            'title': 'Rekap Absensi',
+            'title': 'Rekap Absensi - All',
             'icon': '📅',
             'url': reverse('iclock:attendance_recap'),
-            'description': 'Lihat rekap kehadiran/absensi karyawan.',
+            'description': 'Lihat rekap kehadiran/absensi seluruh karyawan.',
+        })
+    if user.is_staff or user.is_superuser or user.has_perm('iclock.can_view_attendance_recap_kantin'):
+        available_actions.append({
+            'title': 'Rekap Absensi - Kantin',
+            'icon': '🍽️',
+            'url': reverse('iclock:attendance_recap') + '?recap_type=kantin',
+            'description': 'Rekap kehadiran khusus device/lokasi ber-function KANTIN.',
+        })
+    if user.is_staff or user.is_superuser or user.has_perm('iclock.can_view_attendance_recap_driver'):
+        available_actions.append({
+            'title': 'Rekap Absensi - Driver',
+            'icon': '🚚',
+            'url': reverse('iclock:attendance_recap') + '?recap_type=driver',
+            'description': 'Rekap kehadiran khusus karyawan berkode function Driver.',
         })
     # Check-in/out GPS TIDAK digerbangi permission (beda dgn 2 fitur di
     # atas) -- selalu tersedia utk semua user login, karena check-in/out
@@ -224,49 +238,27 @@ def user_set_staff(request, user_id):
     return redirect('dashboard:user_list')
 
 
-# Daftar permission fitur terbatas yang bisa diberikan ke user non-staff
-# (lihat iclock/models.py::FeaturePermission). Format tuple:
-# (full codename 'app_label.codename', codename saja, label buat ditampilkan)
-FEATURE_PERMISSIONS = [
-    ('iclock.can_transfer_finger', 'can_transfer_finger', 'Transfer Data Finger'),
-    ('iclock.can_view_attendance_recap', 'can_view_attendance_recap', 'Rekap Absensi - All (Attendance Recap)'),
-    ('iclock.can_view_attendance_recap_kantin', 'can_view_attendance_recap_kantin', 'Rekap Absensi - Kantin'),
-    ('iclock.can_view_attendance_recap_driver', 'can_view_attendance_recap_driver', 'Rekap Absensi - Driver'),
-]
-
-
 @staff_required
 def user_manage_permissions(request, user_id):
     """
     "Kelola Izin User" -- admin kasih/cabut izin fitur terbatas (Transfer
-    Data Finger, Rekap Absensi) ke user NON-STAFF tertentu, tanpa perlu
-    jadikan mereka staff/admin penuh. Dipakai bareng dengan
-    `accounts.permissions.permission_or_staff_required` yang mengecek
-    permission ini di view-view iclock yang relevan.
-    """
-    target_user = get_object_or_404(User, pk=user_id)
+    Data Finger, Rekap Absensi - All/Kantin/Driver) ke user NON-STAFF
+    tertentu, tanpa perlu jadikan mereka staff/admin penuh. Dipakai
+    bareng dengan `accounts.permissions.permission_or_staff_required`
+    yang mengecek permission ini di view-view iclock yang relevan.
 
+    Logic INTI (daftar FEATURE_PERMISSIONS & set/get izin) SEKARANG di
+    accounts/services.py (get_feature_permissions/set_feature_permissions)
+    -- SATU sumber, dipakai BARENG dgn api/views.py::UserViewSet.manage_permissions
+    (versi API utk Next.js) supaya keduanya SELALU sinkron.
+    """
     if request.method == 'POST':
-        from django.contrib.auth.models import Permission
-        for _full_codename, codename, _label in FEATURE_PERMISSIONS:
-            perm = Permission.objects.filter(codename=codename, content_type__app_label='iclock').first()
-            if not perm:
-                continue
-            if request.POST.get(codename) == 'on':
-                target_user.user_permissions.add(perm)
-            else:
-                target_user.user_permissions.remove(perm)
+        granted = {codename for _f, codename, _l in services.FEATURE_PERMISSIONS if request.POST.get(codename) == 'on'}
+        target_user = services.set_feature_permissions(request.user, user_id, granted)
         messages.success(request, f"Izin fitur untuk '{target_user.username}' berhasil diperbarui.")
         return redirect('dashboard:user_list')
 
-    # Cek permission EKSPLISIT yang sudah di-assign (bukan lewat has_perm(),
-    # supaya tidak ke-'True' otomatis kalau target_user kebetulan staff/
-    # superuser -- checkbox di form harus mencerminkan assignment eksplisit
-    # sungguhan, bukan hak akses efektifnya).
-    feature_perms = [
-        (codename, label, target_user.user_permissions.filter(codename=codename, content_type__app_label='iclock').exists())
-        for _full_codename, codename, label in FEATURE_PERMISSIONS
-    ]
+    target_user, feature_perms = services.get_feature_permissions(user_id)
     return render(request, 'dashboard/user_manage_permissions.html', {
         'target_user': target_user,
         'feature_perms': feature_perms,

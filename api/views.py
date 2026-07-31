@@ -219,3 +219,43 @@ class UserViewSet(viewsets.ViewSet):
         except ServiceError as exc:
             return service_error_response(exc)
         return Response(UserSerializer(user).data)
+
+    @action(detail=True, methods=['get'], url_path='feature-permissions')
+    def feature_permissions(self, request, pk=None):
+        """
+        GET -- daftar izin fitur granular target user (lihat
+        iclock/models.py::FeaturePermission), utk isi dialog "Kelola
+        Izin" di Next.js -- `{codename, label, granted}[]`, urutan &
+        daftarnya SAMA dgn accounts/services.py::FEATURE_PERMISSIONS
+        (satu sumber, dipakai bareng dashboard Django).
+        """
+        try:
+            target, feature_perms = services.get_feature_permissions(pk)
+        except ServiceError as exc:
+            return service_error_response(exc)
+        return Response({
+            'user_id': target.id,
+            'username': target.username,
+            'permissions': [{'codename': c, 'label': l, 'granted': g} for c, l, g in feature_perms],
+        })
+
+    @action(detail=True, methods=['post'], url_path='manage-permissions')
+    def manage_permissions(self, request, pk=None):
+        """
+        POST Body: {"permissions": ["can_transfer_finger", "can_view_attendance_recap_kantin"]}
+        -- codename yang ADA di list akan DICENTANG/diberikan, codename
+        LAIN dari FEATURE_PERMISSIONS yang TIDAK ada di list otomatis
+        DICABUT (bukan cuma nambah) -- SAMA perilaku form checkbox versi
+        Django (uncheck = cabut).
+        """
+        granted = set(request.data.get('permissions') or [])
+        try:
+            target = services.set_feature_permissions(request.user, pk, granted)
+        except ServiceError as exc:
+            return service_error_response(exc)
+        _target, feature_perms = services.get_feature_permissions(pk)
+        return Response({
+            'success': True,
+            'user_id': target.id,
+            'permissions': [{'codename': c, 'label': l, 'granted': g} for c, l, g in feature_perms],
+        })

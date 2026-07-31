@@ -10,6 +10,8 @@ user_detail = UserViewSet.as_view({'get': 'retrieve', 'patch': 'update', 'put': 
 user_reset_password = UserViewSet.as_view({'post': 'reset_password'})
 user_toggle_active = UserViewSet.as_view({'post': 'toggle_active'})
 user_set_staff = UserViewSet.as_view({'post': 'set_staff'})
+user_feature_permissions = UserViewSet.as_view({'get': 'feature_permissions'})
+user_manage_permissions = UserViewSet.as_view({'post': 'manage_permissions'})
 
 urlpatterns = [
     # Auth
@@ -27,4 +29,6 @@ urlpatterns = [
     path('users/<int:pk>/reset-password/', user_reset_password, name='user_reset_password'),
     path('users/<int:pk>/toggle-active/', user_toggle_active, name='user_toggle_active'),
     path('users/<int:pk>/set-staff/', user_set_staff, name='user_set_staff'),
+    path('users/<int:pk>/feature-permissions/', user_feature_permissions, name='user_feature_permissions'),
+    path('users/<int:pk>/manage-permissions/', user_manage_permissions, name='user_manage_permissions'),
 ]
