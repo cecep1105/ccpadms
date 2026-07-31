@@ -589,3 +589,9 @@ VMWARE_ALLOW_SELF_SIGNED_CERT = env.bool('VMWARE_ALLOW_SELF_SIGNED_CERT', defaul
 CLOUDFLARE_ENCRYPTION_KEY = env('CLOUDFLARE_ENCRYPTION_KEY', default='')
 CLOUDFLARE_API_TOKEN_ENCRYPTED = env('CLOUDFLARE_API_TOKEN_ENCRYPTED', default='')
 CLOUDFLARE_API_TIMEOUT = env.int('CLOUDFLARE_API_TIMEOUT', default=15)
+
+# --- Data IT-Infra (registry data infrastruktur bebas -- internet/VPS/
+# domain/dll, lihat netmgmt/itinfra_view.py & netmgmt/models.py::ITInfraEntry)
+# -- data (JSON bebas, SERING berisi password) dienkripsi UTUH sebelum
+# disimpan ke database. ---
+ITINFRA_ENCRYPTION_KEY = env('ITINFRA_ENCRYPTION_KEY', default='')

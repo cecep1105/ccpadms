@@ -13,6 +13,12 @@ from .active_directory_view import (
     ADUserToggleStatusView,
     ADUserUnlockView,
 )
+from .itinfra_view import (
+    ITInfraCategoryListView,
+    ITInfraEntryActionView,
+    ITInfraEntryDetailView,
+    ITInfraEntryListView,
+)
 from .router_choices_view import RouterChoicesView, RouterDefaultView
 from .routeros_api_view import RouterOSCommandView
 from .routeros_firewall_view import FirewallGrantAccessView
@@ -65,6 +71,12 @@ urlpatterns = [
     # GREEDY (nangkep APA PUN termasuk "firewall/grant-access"), Django
     # coba pattern SESUAI URUTAN, jadi yang LEBIH SPESIFIK harus duluan.
     path('router-choices/', RouterChoicesView.as_view(), name='router-choices'),
+
+    # --- Data IT-Infra -- lihat netmgmt/itinfra_view.py & netmgmt/models.py::ITInfraEntry ---
+    path('itinfra/categories/', ITInfraCategoryListView.as_view(), name='itinfra-categories'),
+    path('itinfra/entries/', ITInfraEntryListView.as_view(), name='itinfra-entries'),
+    path('itinfra/entries/<int:entry_id>/', ITInfraEntryDetailView.as_view(), name='itinfra-entry-detail'),
+    path('itinfra/entries/action/', ITInfraEntryActionView.as_view(), name='itinfra-entry-action'),
     path('router-default/', RouterDefaultView.as_view(), name='router-default'),
     path('routeros/<str:host>/firewall/grant-access/', FirewallGrantAccessView.as_view(), name='routeros-firewall-grant-access'),
     path('routeros/<str:host>/<path:command>/', RouterOSCommandView.as_view(), name='routeros-command'),

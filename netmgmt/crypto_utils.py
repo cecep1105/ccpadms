@@ -11,6 +11,7 @@ ZENTYAL_KEY_NAME = 'ZENTYAL_ENCRYPTION_KEY'
 ZENTYAL_MAIL_KEY_NAME = 'ZENTYAL_MAIL_ENCRYPTION_KEY'
 VMWARE_KEY_NAME = 'VMWARE_ENCRYPTION_KEY'
 CLOUDFLARE_KEY_NAME = 'CLOUDFLARE_ENCRYPTION_KEY'
+ITINFRA_KEY_NAME = 'ITINFRA_ENCRYPTION_KEY'
 
 NetmgmtCryptoError = CryptoError
 
@@ -64,3 +65,19 @@ def encrypt_cloudflare_token(plain_token: str) -> str:
 
 def decrypt_cloudflare_token(encrypted_token: str) -> str:
     return _decrypt(encrypted_token, CLOUDFLARE_KEY_NAME)
+
+
+def encrypt_itinfra_data(plain_json_text: str) -> str:
+    """
+    Data dictionary bebas (Data IT-Infra, mis. kredensial internet/VPS/
+    domain, lihat netmgmt/itinfra_view.py) -- SERING berisi PASSWORD di
+    dalam field-nya, jadi DIENKRIPSI UTUH (seluruh JSON, bukan cuma
+    field tertentu) sebelum disimpan ke database, konsisten dgn pola
+    kredensial netmgmt lain (BEDA dari Django JSONField biasa yg
+    tersimpan PLAINTEXT & bisa dibaca siapa pun yg akses database).
+    """
+    return _encrypt(plain_json_text, ITINFRA_KEY_NAME)
+
+
+def decrypt_itinfra_data(encrypted_json_text: str) -> str:
+    return _decrypt(encrypted_json_text, ITINFRA_KEY_NAME)
