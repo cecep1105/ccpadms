@@ -46,6 +46,7 @@ from .zk_client import (
     PRIVILEGE_DEFAULT,
     DeviceConnectionError,
     delete_user_from_device,
+    fetch_device_logs,
     fetch_device_users,
     get_device_network_params,
     get_device_param,
@@ -191,6 +192,42 @@ class ActiveDeviceViewSet(BaseIclockViewSet):
         page_users = users[start:start + page_size]
 
         return Response({'count': len(users), 'page': page, 'page_size': page_size, 'results': page_users})
+
+    @action(detail=True, methods=['get'], url_path='live-logs')
+    def live_logs(self, request, pk=None):
+        """
+        GET .../live-logs/ -- konek LANGSUNG ke device, tampilkan log
+        absensi yang MASIH TERSIMPAN DI MEMORI DEVICE saat ini (BEDA dari
+        tabel `transaction` di database -- itu cuma berisi log yang
+        SUDAH ter-push/transfer, log ini bisa BELUM sampai server sama
+        sekali). Filter ?pin=, sort ?sort=&dir=, page ?page=&page_size=
+        diproses manual di Python (sumbernya list biasa dari pyzk, bukan
+        QuerySet) -- SAMA PERSIS pola dgn live_users() di atas.
+        """
+        device = self.get_object()
+        try:
+            logs = fetch_device_logs(device.IPAddress)
+        except DeviceConnectionError as exc:
+            return Response({'success': False, 'message': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        pin_filter = request.query_params.get('pin', '').strip()
+        if pin_filter:
+            logs = [l for l in logs if pin_filter.lower() in str(l.get('user_id') or '').lower()]
+
+        sort_map = {'user_id': 'user_id', 'timestamp': 'timestamp', 'status': 'status_label', 'punch': 'punch_label'}
+        sort_key = sort_map.get(request.query_params.get('sort'), 'timestamp')
+        # Default DESCENDING (log paling baru dulu) -- BEDA dari live_users
+        # (default ASCENDING) krn utk LOG, yang paling relevan dilihat
+        # PERTAMA biasanya yang PALING BARU, bukan yang PALING LAMA.
+        direction = request.query_params.get('dir', 'desc') != 'asc'
+        logs.sort(key=lambda l: l.get(sort_key) or '', reverse=direction)
+
+        page = int(request.query_params.get('page', 1) or 1)
+        page_size = int(request.query_params.get('page_size', 20) or 20)
+        start = (page - 1) * page_size
+        page_logs = logs[start:start + page_size]
+
+        return Response({'count': len(logs), 'page': page, 'page_size': page_size, 'results': page_logs})
 
     @action(detail=True, methods=['post'], url_path='backup-fingerprints')
     def backup_fingerprints(self, request, pk=None):

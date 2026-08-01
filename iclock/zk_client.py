@@ -34,6 +34,89 @@ def privilege_label(privilege_code) -> str:
     return 'Admin' if code == PRIVILEGE_ADMIN else 'User'
 
 
+# Kode status/punch dari pyzk (zk.attendance.Attendance) -- SAMA persis
+# dgn konvensi PUSH SDK yg sudah dipakai di seluruh proyek ini (Table 2-3
+# dokumen protokol PUSH SDK) -- 'status' = jenis absensi, 'punch' = cara
+# verifikasi.
+ATTENDANCE_STATUS_LABEL = {
+    0: 'Clock In', 1: 'Clock Out', 2: 'Out', 3: 'Return from Out',
+    4: 'Overtime In', 5: 'Overtime Out', 8: 'Meal Start', 9: 'Meal End',
+}
+ATTENDANCE_PUNCH_LABEL = {0: 'Password', 1: 'Fingerprint', 2: 'Card', 9: 'Others'}
+
+
+def _attendance_label(mapping: dict, code) -> str:
+    try:
+        return mapping.get(int(code), f'Kode {code}')
+    except (TypeError, ValueError):
+        return '-'
+
+
+def fetch_device_logs(ip_address: str, port: int = ZK_DEFAULT_PORT, timeout: int = ZK_DEFAULT_TIMEOUT):
+    """
+    Konek langsung ke mesin fingerprint via pyzk, ambil SEMUA log absensi
+    yang MASIH TERSIMPAN DI MEMORI DEVICE saat ini (BUKAN dari tabel
+    `transaction` di database kita -- itu cuma berisi log yang SUDAH
+    di-push/ditransfer; log ini bisa jadi BELUM sampai ke server sama
+    sekali, mis. device baru nyala lagi setelah offline lama, atau push
+    gagal karena alasan tertentu).
+
+    Return: list of dict [{user_id, timestamp (ISO string), status,
+    status_label, punch, punch_label}, ...] -- URUT PALING BARU DULU
+    (descending timestamp) sbg default, TAPI TIDAK dipaginasi di sini
+    (list utuh) -- filter/sort/page dikerjakan pemanggil (lihat
+    api_views.py::ActiveDeviceViewSet.live_logs), SAMA pola dgn
+    fetch_device_users() drpd live_users action.
+
+    Raise: DeviceConnectionError -- SAMA persis kondisi & pesan spt
+    fetch_device_users() (pyzk belum terinstall/IP kosong/gagal konek).
+    """
+    try:
+        from zk import ZK
+    except ImportError as exc:
+        raise DeviceConnectionError(
+            "Library 'pyzk' belum terinstall di server. Jalankan: pip install pyzk"
+        ) from exc
+
+    if not ip_address:
+        raise DeviceConnectionError('Device ini belum punya IP Address yang tercatat di database.')
+
+    zk_instance = ZK(ip_address, port=port, timeout=timeout, password=0, force_udp=False, ommit_ping=False)
+    conn = None
+    try:
+        conn = zk_instance.connect()
+        raw_logs = conn.get_attendance()
+    except Exception as exc:  # noqa: BLE001 -- pyzk melempar berbagai jenis exception socket/protokol
+        logger.warning('Gagal konek ke device fingerprint %s:%s -> %s', ip_address, port, exc)
+        raise DeviceConnectionError(
+            f'Tidak bisa terhubung ke device di {ip_address}:{port}. Pastikan device menyala, '
+            f'terhubung ke jaringan yang sama dengan server ini, dan port {port} tidak diblokir '
+            f'firewall. Detail teknis: {exc}'
+        ) from exc
+    finally:
+        if conn is not None:
+            try:
+                conn.disconnect()
+            except Exception:  # noqa: BLE001
+                pass
+
+    logs = []
+    for entry in raw_logs:
+        timestamp = getattr(entry, 'timestamp', None)
+        status_code = getattr(entry, 'status', None)
+        punch_code = getattr(entry, 'punch', None)
+        logs.append({
+            'user_id': getattr(entry, 'user_id', None),
+            'timestamp': timestamp.isoformat() if isinstance(timestamp, datetime) else None,
+            'status': status_code,
+            'status_label': _attendance_label(ATTENDANCE_STATUS_LABEL, status_code),
+            'punch': punch_code,
+            'punch_label': _attendance_label(ATTENDANCE_PUNCH_LABEL, punch_code),
+        })
+    logs.sort(key=lambda r: r['timestamp'] or '', reverse=True)
+    return logs
+
+
 def fetch_device_users(ip_address: str, port: int = ZK_DEFAULT_PORT, timeout: int = ZK_DEFAULT_TIMEOUT):
     """
     Konek langsung ke mesin fingerprint via pyzk, ambil daftar user yang
