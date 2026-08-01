@@ -2,6 +2,7 @@ from calendar import monthrange
 from collections import defaultdict
 from datetime import date, timedelta
 
+from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db import transaction as db_transaction
@@ -31,7 +32,14 @@ from .forms import (
     TransferFingerForm,
 )
 from .models import RegisteredDevice, department, devcmds, devlog, employee, fptemp, iclock, oplog, transaction
-from .services import backup_device_fingerprints, maybe_activate_after_pool_change, normalize_pin
+from .services import (
+    backup_device_fingerprints,
+    driver_function_codes,
+    has_attendance_recap_permission,
+    kantin_function_codes,
+    maybe_activate_after_pool_change,
+    normalize_pin,
+)
 from .zk_client import (
     PRIVILEGE_ADMIN,
     PRIVILEGE_DEFAULT,
@@ -1158,7 +1166,7 @@ def _to_local_time(dt):
     return dt
 
 
-@permission_or_staff_required('iclock.can_view_attendance_recap')
+@login_required(login_url='accounts:login')
 def attendance_recap(request):
     """
     Rekap Kehadiran: filter by PIN (lookup atau regex) / Device Function /
@@ -1174,7 +1182,30 @@ def attendance_recap(request):
     Kalau `pin_exact` ada di query string (di-set JS pas admin klik salah
     satu hasil autocomplete PIN), redirect ke halaman card rekap bulanan
     utk 1 karyawan itu -- filter lain (function/pool/device/date) diabaikan.
+
+    3 varian (`?recap_type=all|kantin|driver`, default 'all') -- izin &
+    filter data-nya SAMA PERSIS dgn versi API (iclock/api_views.py::
+    AttendanceRecapAPIView), keduanya pakai fungsi bersama di
+    iclock/services.py -- KOREKSI dari versi SEBELUMNYA yang CUMA
+    ke-update di API, versi Django INI sempat KETINGGALAN (masih pakai
+    decorator lama @permission_or_staff_required('iclock.can_view_attendance_recap')
+    SAJA, TIDAK sadar `recap_type`) -- akibatnya user yang cuma dikasih
+    izin 'Rekap Kantin' bisa LIHAT card-nya di halaman utama (krn
+    dashboard/views.py::user_home SUDAH benar dicek per-jenis), TAPI
+    begitu diklik/dibuka, DITOLAK "Anda tidak memiliki akses" -- 2 tempat
+    itu (tombol/card vs halaman tujuannya) TERNYATA cek permission yang
+    BEDA. Sekarang permission check TIDAK LAGI via decorator TETAP
+    (perm_codenames di-set SAAT deklarasi, sebelum tahu `recap_type` dari
+    request), MELAINKAN manual di dalam fungsi (BISA baca query param
+    dulu, baru tentukan permission mana yang relevan).
     """
+    recap_type = request.GET.get('recap_type', 'all')
+    if recap_type not in ('all', 'kantin', 'driver'):
+        recap_type = 'all'
+    if not has_attendance_recap_permission(request.user, recap_type):
+        messages.error(request, 'Anda tidak memiliki akses ke halaman ini.')
+        return redirect('dashboard:index')
+
     pin_exact = request.GET.get('pin_exact', '').strip()
     if pin_exact:
         return redirect('iclock:attendance_recap_employee_card', pin=pin_exact)
@@ -1206,6 +1237,17 @@ def attendance_recap(request):
             d -= timedelta(days=1)
 
         base_qs = transaction.objects.filter(TTime__date__gte=date_from, TTime__date__lte=date_to)
+
+        # Filter Function SESUAI recap_type -- 'kantin'/'driver' HANYA
+        # tampilkan transaksi yg Function-nya cocok (lihat docstring
+        # iclock/services.py utk penjelasan kode-kodenya); TIDAK
+        # menimpa filter `function` dropdown biasa (yg tetap ada,
+        # relevan cuma utk recap_type='all').
+        if recap_type == 'kantin':
+            base_qs = base_qs.filter(Function__in=kantin_function_codes())
+        elif recap_type == 'driver':
+            base_qs = base_qs.filter(Function__in=driver_function_codes())
+
         if pin_pattern:
             # Regex diterapkan di level DB (bukan di Python) supaya tetap
             # efisien walau jumlah transaksi besar -- MySQL & SQLite modern
@@ -1265,6 +1307,7 @@ def attendance_recap(request):
 
     return render(request, 'iclock/attendance_recap.html', {
         'form': form,
+        'recap_type': recap_type,
         'queried': queried,
         'date_columns': date_columns,
         'recap_rows': recap_rows,
@@ -1274,9 +1317,17 @@ def attendance_recap(request):
     })
 
 
-@permission_or_staff_required('iclock.can_view_attendance_recap')
+@permission_or_staff_required(
+    'iclock.can_view_attendance_recap', 'iclock.can_view_attendance_recap_kantin', 'iclock.can_view_attendance_recap_driver',
+)
 def ajax_employee_search(request):
-    """Endpoint kecil buat autocomplete PIN di Attendance Recap -- cari by PIN atau nama."""
+    """
+    Endpoint kecil buat autocomplete PIN di Attendance Recap -- cari by PIN atau nama.
+    Diperluas ke 3 permission (SEBELUMNYA cuma 'can_view_attendance_recap')
+    -- BUG SEJENIS dgn attendance_recap di atas: user yang cuma dikasih
+    izin Kantin/Driver TETAP perlu bisa pakai autocomplete PIN di
+    halaman rekap MEREKA, bukan cuma yang py izin 'All'.
+    """
     q = request.GET.get('q', '').strip()
     results = []
     if len(q) >= 2:

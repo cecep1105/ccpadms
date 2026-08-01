@@ -347,3 +347,42 @@ def consolidate_mobile_attendance_to_iclock(pin: str, timestamp, checktype: str,
 
     from .tasks import write_mobile_attlog_to_iclock
     write_mobile_attlog_to_iclock.delay(pin, timestamp.isoformat(), ic_checktype, function_code or '', str(pool_id or ''))
+
+
+# ---------------------------------------------------------------------------
+# Attendance Recap -- 3 varian (All/Kantin/Driver, granular permission) --
+# LOGIC BERSAMA dipakai KEDUA implementasi: iclock/views.py::attendance_recap
+# (server-rendered, dituju card dashboard Django) DAN
+# iclock/api_views.py::AttendanceRecapAPIView (JSON, dikonsumsi Next.js) --
+# SATU sumber supaya keduanya SELALU berperilaku identik (izin & filter
+# data), tidak ada risiko salah satu ketinggalan update spt yang SEMPAT
+# terjadi (view Django lupa diupdate saat granular permission ditambah,
+# ketahuan dari laporan produksi: card muncul tapi akses ditolak).
+# ---------------------------------------------------------------------------
+RECAP_TYPE_PERMISSION_MAP = {
+    'all': 'iclock.can_view_attendance_recap',
+    'kantin': 'iclock.can_view_attendance_recap_kantin',
+    'driver': 'iclock.can_view_attendance_recap_driver',
+}
+
+
+def kantin_function_codes() -> list:
+    """Key settings.DEVICEFUNCTION yang value-nya PERSIS 'KANTIN' (biasanya cuma 1, key 'X')."""
+    from django.conf import settings
+    return [code for code, desc in settings.DEVICEFUNCTION.items() if desc == 'KANTIN']
+
+
+def driver_function_codes() -> list:
+    """Key settings.DEVICEFUNCTION yang value-nya DIAWALI 'DRIVER' (mis. 'DRIVER-HIBA', 'DRIVER-HRC', dst)."""
+    from django.conf import settings
+    return [code for code, desc in settings.DEVICEFUNCTION.items() if desc.startswith('DRIVER')]
+
+
+def has_attendance_recap_permission(user, recap_type: str) -> bool:
+    """Staff/superuser SELALU lolos; user non-staff HARUS py permission yang PERSIS sesuai `recap_type` yang diminta."""
+    if not (user and user.is_authenticated):
+        return False
+    if user.is_staff or user.is_superuser:
+        return True
+    perm = RECAP_TYPE_PERMISSION_MAP.get(recap_type, RECAP_TYPE_PERMISSION_MAP['all'])
+    return user.has_perm(perm)

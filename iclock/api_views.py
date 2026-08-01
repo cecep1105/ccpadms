@@ -37,6 +37,7 @@ from .serializers import (
     TransactionSerializer,
     TransferFingerActionSerializer,
 )
+from . import services
 from .services import backup_device_fingerprints, maybe_activate_after_pool_change, normalize_pin
 from .views import INDONESIAN_DAYS, _is_in_state, _to_local_time
 from .zk_client import (
@@ -405,16 +406,6 @@ class DeviceCommandViewSet(BaseIclockViewSet):
 # ---------------------------------------------------------------------------
 # ATTENDANCE RECAP (fitur besar: matrix PIN x tanggal) & pendukungnya
 # ---------------------------------------------------------------------------
-def _kantin_function_codes() -> list:
-    """Key settings.DEVICEFUNCTION yang value-nya PERSIS 'KANTIN' (biasanya cuma 1, key 'X') -- dipakai filter Rekap Kantin."""
-    return [code for code, desc in settings.DEVICEFUNCTION.items() if desc == 'KANTIN']
-
-
-def _driver_function_codes() -> list:
-    """Key settings.DEVICEFUNCTION yang value-nya DIAWALI 'DRIVER' (mis. 'DRIVER-HIBA', 'DRIVER-HRC', dst -- BEDA vendor/rute, tapi SEMUA dihitung 'Driver') -- dipakai filter Rekap Driver."""
-    return [code for code, desc in settings.DEVICEFUNCTION.items() if desc.startswith('DRIVER')]
-
-
 class HasAttendanceRecapPermission(BasePermission):
     """
     Cek permission SESUAI `recap_type` yang diminta (all/kantin/driver) --
@@ -425,22 +416,17 @@ class HasAttendanceRecapPermission(BasePermission):
     permission yang PERSIS sesuai jenis rekap yang diminta -- user yang
     cuma dikasih izin 'Rekap Kantin' TIDAK BISA akses 'Rekap Driver' atau
     'Rekap All' dgn cara ganti parameter URL saja.
+
+    Logic INTI ada di iclock/services.py::has_attendance_recap_permission
+    -- SATU sumber, dipakai BARENG dgn iclock/views.py::attendance_recap
+    (versi server-rendered/Django, dituju card dashboard) supaya KEDUANYA
+    SELALU konsisten (lihat catatan lengkap di services.py -- versi
+    Django SEMPAT ketinggalan update saat granular permission ditambah).
     """
-    PERMISSION_MAP = {
-        'all': 'iclock.can_view_attendance_recap',
-        'kantin': 'iclock.can_view_attendance_recap_kantin',
-        'driver': 'iclock.can_view_attendance_recap_driver',
-    }
 
     def has_permission(self, request, view):
-        user = request.user
-        if not (user and user.is_authenticated):
-            return False
-        if user.is_staff or user.is_superuser:
-            return True
         recap_type = request.query_params.get('recap_type', 'all')
-        perm = self.PERMISSION_MAP.get(recap_type, self.PERMISSION_MAP['all'])
-        return user.has_perm(perm)
+        return services.has_attendance_recap_permission(request.user, recap_type)
 
 
 class AttendanceRecapAPIView(APIView):
@@ -478,9 +464,9 @@ class AttendanceRecapAPIView(APIView):
 
         recap_type = data.get('recap_type', 'all')
         if recap_type == 'kantin':
-            base_qs = base_qs.filter(Function__in=_kantin_function_codes())
+            base_qs = base_qs.filter(Function__in=services.kantin_function_codes())
         elif recap_type == 'driver':
-            base_qs = base_qs.filter(Function__in=_driver_function_codes())
+            base_qs = base_qs.filter(Function__in=services.driver_function_codes())
 
         if data.get('pin'):
             base_qs = base_qs.filter(UserID__PIN__iregex=data['pin'])
