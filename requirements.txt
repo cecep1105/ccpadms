@@ -62,6 +62,10 @@ RouterOS-api>=0.21.0
 # server mail terpisah) -- lihat netmgmt/zentyal_mail_view.py & test/zentyalmail_v2.py
 requests>=2.31
 
+# Untuk export Rekap Absensi ke .xlsx (format rapi, bukan sekadar CSV) --
+# lihat iclock/xlsx_export.py.
+openpyxl>=3.1
+
 # Untuk detail per-VM VMware vCenter (SOAP API, PropertyCollector -- lihat
 # netmgmt/vmware_view.py). List Host/VM Guest TETAP di Next.js (REST API,
 # src/lib/vsphere-client.ts) -- pyvmomi CUMA dipakai utk halaman detail.

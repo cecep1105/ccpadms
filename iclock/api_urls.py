@@ -4,6 +4,7 @@ from rest_framework.routers import DefaultRouter
 from .api_views import (
     ActiveDeviceViewSet,
     AttendanceRecapAPIView,
+    AttendanceRecapExportAPIView,
     AttendanceRecapEmployeeCardAPIView,
     DepartmentViewSet,
     DeviceCommandViewSet,
@@ -33,6 +34,7 @@ router.register('device-command', DeviceCommandViewSet, basename='device-command
 
 urlpatterns = [
     path('attendance-recap/', AttendanceRecapAPIView.as_view(), name='attendance_recap'),
+    path('attendance-recap/export/', AttendanceRecapExportAPIView.as_view(), name='attendance_recap_export'),
     path('attendance-recap/<str:pin>/card/', AttendanceRecapEmployeeCardAPIView.as_view(), name='attendance_recap_card'),
     path('employee-search/', EmployeeSearchAPIView.as_view(), name='employee_search'),
     path('device-function-choices/', DeviceFunctionChoicesAPIView.as_view(), name='device_function_choices'),

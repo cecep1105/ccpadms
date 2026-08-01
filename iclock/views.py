@@ -7,8 +7,9 @@ from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db import transaction as db_transaction
 from django.db.models import Q
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
@@ -1334,6 +1335,57 @@ def ajax_employee_search(request):
         qs = employee.objects.filter(Q(PIN__icontains=q) | Q(EName__icontains=q)).order_by('PIN')[:15]
         results = [{'pin': e.PIN, 'name': e.EName or ''} for e in qs]
     return JsonResponse({'employees': results})
+
+
+@login_required(login_url='accounts:login')
+def attendance_recap_export(request):
+    """
+    Export Rekap Absensi ke .xlsx -- filter SAMA PERSIS dgn attendance_recap
+    (recap_type/pin/function/pool/device/date_from/date_to dari query
+    string yg SAMA), TAPI TIDAK dipaginasi (SEMUA baris yg cocok filter
+    diekspor sekaligus). Permission check SAMA (per recap_type), lihat
+    catatan lengkap di attendance_recap().
+    """
+    recap_type = request.GET.get('recap_type', 'all')
+    if recap_type not in ('all', 'kantin', 'driver'):
+        recap_type = 'all'
+    if not has_attendance_recap_permission(request.user, recap_type):
+        messages.error(request, 'Anda tidak memiliki akses ke halaman ini.')
+        return redirect('dashboard:index')
+
+    form = AttendanceRecapFilterForm(request.GET or None, user=request.user)
+    if not form.is_valid():
+        messages.error(request, 'Filter tidak valid -- pastikan tanggal Dari/Sampai sudah diisi dgn benar.')
+        return redirect(f"{reverse('iclock:attendance_recap')}?{request.GET.urlencode()}")
+
+    from .xlsx_export import build_attendance_recap_workbook, workbook_to_bytes
+
+    filter_extra = []
+    pool = form.cleaned_data.get('pool')
+    device = form.cleaned_data.get('device')
+    if pool:
+        filter_extra.append(f'Pool: {pool.DeptName}')
+    if device:
+        filter_extra.append(f'Device: {device.Alias}')
+
+    wb = build_attendance_recap_workbook(
+        recap_type=recap_type,
+        pin=form.cleaned_data.get('pin'),
+        function=form.cleaned_data.get('function'),
+        pool=pool.DeptID if pool else None,
+        device=device.SN if device else None,
+        date_from=form.cleaned_data['date_from'],
+        date_to=form.cleaned_data['date_to'],
+        filter_summary_extra=filter_extra,
+    )
+
+    filename = f"rekap-absensi-{recap_type}-{form.cleaned_data['date_from']}-{form.cleaned_data['date_to']}.xlsx"
+    response = HttpResponse(
+        workbook_to_bytes(wb),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
 
 
 @permission_or_staff_required('iclock.can_view_attendance_recap')

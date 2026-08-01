@@ -45,6 +45,12 @@
             class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium inline-flex items-center gap-2">
       <span id="recapQueryLabel">Query</span>
     </button>
+    <button type="submit" formaction="{% url 'iclock:attendance_recap_export' %}"
+            class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium inline-flex items-center gap-2"
+            title="Export hasil (SEMUA baris yg cocok filter, bukan cuma halaman ini) ke .xlsx">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+      Export XLSX
+    </button>
     <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 sm:ml-auto">
       Baris/halaman:
       <select name="page_size" onchange="document.getElementById('recapFilterForm').submit()"

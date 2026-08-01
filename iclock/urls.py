@@ -78,6 +78,7 @@ urlpatterns = [
 
     # Attendance Recap / Rekap Kehadiran
     path('attendance-recap/', views.attendance_recap, name='attendance_recap'),
+    path('attendance-recap/export/', views.attendance_recap_export, name='attendance_recap_export'),
     path('attendance-recap/employee/<str:pin>/', views.attendance_recap_employee_card, name='attendance_recap_employee_card'),
     path('ajax/employee-search/', views.ajax_employee_search, name='ajax_employee_search'),
 ]

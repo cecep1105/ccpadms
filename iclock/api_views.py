@@ -10,6 +10,7 @@ from datetime import date, timedelta
 from django.conf import settings
 from django.db import transaction as db_transaction
 from django.db.models import Q
+from django.http import HttpResponse
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import BasePermission, IsAuthenticated
@@ -605,6 +606,53 @@ class PoolDeviceChoicesAPIView(APIView):
             data['devices'] = [{'sn': d['SN'], 'name': d['Alias']} for d in devices]
 
         return Response(data)
+
+
+class AttendanceRecapExportAPIView(APIView):
+    """
+    GET /api/v1/iclock/attendance-recap/export/?recap_type=&pin=&function=&pool=&device=&date_from=&date_to=
+    -- export .xlsx dgn format RAPI (lihat iclock/xlsx_export.py utk detail
+    styling) -- filter & permission SAMA PERSIS dgn AttendanceRecapAPIView
+    (di atas), TAPI TIDAK dipaginasi (SEMUA baris yg cocok filter).
+    Response BINARY (bukan JSON) -- pakai HttpResponse Django langsung
+    (bukan DRF Response) drpd DRF coba nego content-type.
+    """
+    permission_classes = [IsAuthenticated, HasAttendanceRecapPermission]
+
+    def get(self, request):
+        serializer = AttendanceRecapQuerySerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        recap_type = data.get('recap_type', 'all')
+
+        from .xlsx_export import build_attendance_recap_workbook, workbook_to_bytes
+
+        filter_extra = []
+        pool = data.get('pool')
+        device = data.get('device')
+        if pool:
+            filter_extra.append(f'Pool: {pool.DeptName}')
+        if device:
+            filter_extra.append(f'Device: {device.Alias}')
+
+        wb = build_attendance_recap_workbook(
+            recap_type=recap_type,
+            pin=data.get('pin'),
+            function=data.get('function'),
+            pool=pool.DeptID if pool else None,
+            device=device.SN if device else None,
+            date_from=data['date_from'],
+            date_to=data['date_to'],
+            filter_summary_extra=filter_extra,
+        )
+
+        filename = f"rekap-absensi-{recap_type}-{data['date_from']}-{data['date_to']}.xlsx"
+        response = HttpResponse(
+            workbook_to_bytes(wb),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
 
 
 class AttendanceRecapEmployeeCardAPIView(APIView):
