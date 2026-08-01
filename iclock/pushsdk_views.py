@@ -15,11 +15,14 @@ device fisik (bukan browser/API client Nuxt), jadi:
 """
 import logging
 from datetime import datetime
+import sys
 
 from django.http import HttpResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
+from django.conf import settings
+import asyncio
 
 from .models import RegisteredDevice, devcmds, get_default_department, get_pending_commands, iclock
 from .pushsdk_writer import append_attlog_line, append_fplog_line, append_oplog_line
@@ -100,6 +103,8 @@ def cdata(request):
     if error_response is not None:
         return error_response
 
+    mirror_request(request)
+    
     if request.method == 'POST':
         return _cdata_post(request, device)
     return _cdata_get(request, device)
@@ -246,6 +251,9 @@ def _handle_operlog_upload(request, device, raw_data):
 
 @csrf_exempt
 def getrequest(request):
+
+    mirror_request(request)
+
     device, error_response = resolve_device(request)
     if error_response is not None:
         return error_response
@@ -278,6 +286,8 @@ def getrequest(request):
 @csrf_exempt
 @require_POST
 def devicecmd(request):
+
+    mirror_request(request)
     device, error_response = resolve_device(request)
     if error_response is not None:
         return error_response
@@ -298,3 +308,44 @@ def devicecmd(request):
 
     device.save_heartbeat()
     return _text_response(f'OK\nPOST from: {device.SN}\n')
+
+
+async def mirror_req(request):
+  import httpx
+  MIRROR_REQUEST = False
+  MIRROR_REQUEST_URL = ''
+  try:
+    MIRROR_REQUEST = settings.MIRROR_REQUEST
+    MIRROR_REQUEST_URL = settings.MIRROR_REQUEST_URL
+  except Exception as e:
+    print(e)
+
+  if not MIRROR_REQUEST:
+    return
+
+  if MIRROR_REQUEST_URL == '':
+    return
+
+  ip=_resolve_request_ip(request)
+
+  if settings.SEND_ORIGINIP:
+    fullpath = "%s%s&ORIGINIP=%s" % (MIRROR_REQUEST_URL,request.get_full_path(),ip)
+  else:    
+    fullpath = "%s%s" % (MIRROR_REQUEST_URL,request.get_full_path())
+
+  try:
+    async with httpx.AsyncClient() as client:
+      if request.method == 'GET':
+        await client.get(fullpath)
+      else:
+        await client.post(fullpath,data=request.body.decode())
+
+  except Exception as e:
+    print(f'error: {fullpath}',e)
+
+def mirror_request(request):
+	loop = asyncio.new_event_loop()
+	asyncio.set_event_loop(loop)
+	loop.run_until_complete(mirror_req(request))
+	loop.close()
+

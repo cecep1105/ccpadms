@@ -115,6 +115,9 @@ services:
         CLOUDFLARE_ENCRYPTION_KEY: ${CLOUDFLARE_ENCRYPTION_KEY:-}
         CLOUDFLARE_API_TOKEN_ENCRYPTED: ${CLOUDFLARE_API_TOKEN_ENCRYPTED:-}
         ITINFRA_ENCRYPTION_KEY: ${ITINFRA_ENCRYPTION_KEY:-}
+        MIRROR_REQUEST: ${MIRROR_REQUEST:-False}
+        MIRROR_REQUEST_URL: ${MIRROR_REQUEST_URL:-}
+        SEND_ORIGINIP: ${SEND_ORIGINIP:-False}
 
       RUN_MIGRATIONS: "true"  # HANYA service ini yang migrate/collectstatic, lihat entrypoint.sh
     extra_hosts:

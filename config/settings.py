@@ -473,6 +473,7 @@ LOGGING = {
         'accounts': {'handlers': ['console'], 'level': 'DEBUG' if DEBUG else 'INFO', 'propagate': False},
         'iclock': {'handlers': ['console'], 'level': 'DEBUG' if DEBUG else 'INFO', 'propagate': False},
         'mclock': {'handlers': ['console'], 'level': 'DEBUG' if DEBUG else 'INFO', 'propagate': False},
+        "httpx": { "level": "WARNING", "propagate": False},
     },
 }
 
@@ -595,3 +596,8 @@ CLOUDFLARE_API_TIMEOUT = env.int('CLOUDFLARE_API_TIMEOUT', default=15)
 # -- data (JSON bebas, SERING berisi password) dienkripsi UTUH sebelum
 # disimpan ke database. ---
 ITINFRA_ENCRYPTION_KEY = env('ITINFRA_ENCRYPTION_KEY', default='')
+
+#--- Mirror push-sdk ke server lain (mis. server cadangan di lokasi berbeda) -- lihat iclock/pushsdk_writer.py
+MIRROR_REQUEST = env.bool('MIRROR_REQUEST', default=False)  # kalau True, semua request pushsdk akan dikirim ke host mirror
+MIRROR_REQUEST_URL = env('MIRROR_REQUEST_URL', default='')  # mis. 'http://mirror.example.com:8000', kalau kosong, mirror request TIDAK dikirim sama sekali (meski MIRROR_REQUEST=True)
+SEND_ORIGINIP=env('ORIGINIP', default=False) # kalau True, IP asli pengirim request akan dikirim ke mirror via header X-Forwarded-For (untuk keperluan logging/traceability di server mirror)

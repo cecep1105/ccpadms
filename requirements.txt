@@ -70,3 +70,5 @@ openpyxl>=3.1
 # netmgmt/vmware_view.py). List Host/VM Guest TETAP di Next.js (REST API,
 # src/lib/vsphere-client.ts) -- pyvmomi CUMA dipakai utk halaman detail.
 pyvmomi>=8.0
+
+httpx>=0.28.1
