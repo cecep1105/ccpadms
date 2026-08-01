@@ -495,6 +495,15 @@ MIKROTIK_PASSWORD_ENCRYPTED = env('MIKROTIK_PASSWORD_ENCRYPTED', default='')
 # WAJIB nilainya SAMA (router yang sama), krn keduanya rujuk router fisik
 # yang sama, cuma beda proses (Django vs Next.js) yang membacanya.
 MIKROTIK_NETWATCH_ROUTER_IP = env('MIKROTIK_NETWATCH_ROUTER_IP', default='10.100.202.1')
+# Router DEFAULT utk DHCP Lease/Firewall Filter PORTAL (netmgmt/portal_views.py)
+# -- fallback KALAU admin belum set default lewat NetmgmtRouterDefault
+# (Django Admin) -- SAMA nama/nilai default dgn env var yang dipakai
+# Next.js (nextadms .env: MIKROTIK_DHCP_ROUTER_IP/MIKROTIK_FWFILTER_ROUTER_IP)
+# utk halaman STAFF, TAPI ini VARIABEL TERPISAH (Django vs Next.js baca
+# .env masing2 proses sendiri) -- WAJIB nilainya SAMA kalau mau router
+# defaultnya konsisten antara portal & staff.
+MIKROTIK_DHCP_ROUTER_IP = env('MIKROTIK_DHCP_ROUTER_IP', default='10.100.202.254')
+MIKROTIK_FWFILTER_ROUTER_IP = env('MIKROTIK_FWFILTER_ROUTER_IP', default='10.100.202.254')
 # Token OPSIONAL (query string ?token=...) -- endpoint /nwupdate TIDAK
 # PAKAI autentikasi Django biasa (session/JWT) krn dipanggil Mikrotik
 # langsung, bukan browser. Kalau env var ini KOSONG, endpoint TERBUKA

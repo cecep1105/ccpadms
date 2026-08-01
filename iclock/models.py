@@ -712,4 +712,7 @@ class FeaturePermission(models.Model):
             ('can_view_attendance_recap', 'Bisa melihat Rekap Absensi - All (Attendance Recap)'),
             ('can_view_attendance_recap_kantin', 'Bisa melihat Rekap Absensi - Kantin'),
             ('can_view_attendance_recap_driver', 'Bisa melihat Rekap Absensi - Driver'),
+            ('can_view_dhcp_lease', 'Bisa melihat DHCP Lease (Mikrotik)'),
+            ('can_view_fwfilter', 'Bisa melihat & Grant Access Firewall Filter (Mikrotik)'),
+            ('can_view_netwatch', 'Bisa melihat & Kelola Netwatch (Mikrotik)'),
         ]

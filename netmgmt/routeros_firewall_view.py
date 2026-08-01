@@ -26,7 +26,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from api.permissions import IsStaffRole
+from api.permissions import HasFeaturePermission
 from netmgmt.routeros_api_view import MikrotikConnectionError, get_routeros_connection
 
 BLOCK_ELSE_COMMENT = 'BLOCK-ELSE'
@@ -47,7 +47,12 @@ class FirewallGrantAccessView(APIView):
 
     Otomasi PENUH alur "copy rule sebelum BLOCK-ELSE" (lihat docstring modul).
     """
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    # HasFeaturePermission SUDAH otomatis loloskan staff/superuser (SAMA
+    # spt IsStaffRole sebelumnya), PLUS user non-staff yg py izin
+    # granular 'can_view_fwfilter' (portal, lihat netmgmt/portal_views.py)
+    # -- workflow ini AMAN dibuka ke portal krn SUDAH scoped/terkontrol
+    # (BUKAN command RouterOS bebas spt proxy generik).
+    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_fwfilter')]
 
     def post(self, request, host=None):
         mac_address = (request.data.get('mac_address') or '').strip()

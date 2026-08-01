@@ -331,6 +331,9 @@ FEATURE_PERMISSIONS = [
     ('iclock.can_view_attendance_recap', 'can_view_attendance_recap', 'Rekap Absensi - All (Attendance Recap)'),
     ('iclock.can_view_attendance_recap_kantin', 'can_view_attendance_recap_kantin', 'Rekap Absensi - Kantin'),
     ('iclock.can_view_attendance_recap_driver', 'can_view_attendance_recap_driver', 'Rekap Absensi - Driver'),
+    ('iclock.can_view_dhcp_lease', 'can_view_dhcp_lease', 'DHCP Lease (Mikrotik)'),
+    ('iclock.can_view_fwfilter', 'can_view_fwfilter', 'Firewall Filter - Lihat & Grant Access (Mikrotik)'),
+    ('iclock.can_view_netwatch', 'can_view_netwatch', 'Netwatch - Lihat & Kelola (Mikrotik)'),
 ]
 
 

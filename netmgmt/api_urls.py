@@ -19,6 +19,12 @@ from .itinfra_view import (
     ITInfraEntryDetailView,
     ITInfraEntryListView,
 )
+from .portal_views import (
+    PortalDhcpLeaseListView,
+    PortalFwFilterListView,
+    PortalNetwatchActionView,
+    PortalNetwatchListView,
+)
 from .router_choices_view import RouterChoicesView, RouterDefaultView
 from .routeros_api_view import RouterOSCommandView
 from .routeros_firewall_view import FirewallGrantAccessView
@@ -71,6 +77,12 @@ urlpatterns = [
     # GREEDY (nangkep APA PUN termasuk "firewall/grant-access"), Django
     # coba pattern SESUAI URUTAN, jadi yang LEBIH SPESIFIK harus duluan.
     path('router-choices/', RouterChoicesView.as_view(), name='router-choices'),
+
+    # --- Mikrotik PORTAL (non-staff, izin granular) -- lihat netmgmt/portal_views.py ---
+    path('portal/dhcp-lease/', PortalDhcpLeaseListView.as_view(), name='portal-dhcp-lease'),
+    path('portal/fwfilter/', PortalFwFilterListView.as_view(), name='portal-fwfilter'),
+    path('portal/netwatch/', PortalNetwatchListView.as_view(), name='portal-netwatch'),
+    path('portal/netwatch/action/', PortalNetwatchActionView.as_view(), name='portal-netwatch-action'),
 
     # --- Data IT-Infra -- lihat netmgmt/itinfra_view.py & netmgmt/models.py::ITInfraEntry ---
     path('itinfra/categories/', ITInfraCategoryListView.as_view(), name='itinfra-categories'),

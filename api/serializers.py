@@ -10,6 +10,9 @@ class UserSerializer(serializers.ModelSerializer):
     can_view_attendance_recap = serializers.SerializerMethodField()
     can_view_attendance_recap_kantin = serializers.SerializerMethodField()
     can_view_attendance_recap_driver = serializers.SerializerMethodField()
+    can_view_dhcp_lease = serializers.SerializerMethodField()
+    can_view_fwfilter = serializers.SerializerMethodField()
+    can_view_netwatch = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -23,14 +26,18 @@ class UserSerializer(serializers.ModelSerializer):
             # User") -- staff/superuser otomatis True utk semuanya (efektif
             # selalu punya akses), dipakai frontend Next.js utk tahu kartu/
             # tab mana yang perlu ditampilkan (mis. 3 tab Rekap Absensi:
-            # All/Kantin/Driver, lihat iclock/api_views.py::AttendanceRecapAPIView).
+            # All/Kantin/Driver, lihat iclock/api_views.py::AttendanceRecapAPIView;
+            # DHCP Lease/Firewall Filter/Netwatch di portal, lihat
+            # netmgmt/portal_views.py).
             'can_transfer_finger', 'can_view_attendance_recap',
             'can_view_attendance_recap_kantin', 'can_view_attendance_recap_driver',
+            'can_view_dhcp_lease', 'can_view_fwfilter', 'can_view_netwatch',
         ]
         read_only_fields = [
             'id', 'username', 'auth_source', 'is_superuser', 'created_at', 'updated_at',
             'can_transfer_finger', 'can_view_attendance_recap',
             'can_view_attendance_recap_kantin', 'can_view_attendance_recap_driver',
+            'can_view_dhcp_lease', 'can_view_fwfilter', 'can_view_netwatch',
         ]
 
     def get_can_transfer_finger(self, obj):
@@ -44,6 +51,15 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_can_view_attendance_recap_driver(self, obj):
         return bool(obj.is_staff or obj.is_superuser or obj.has_perm('iclock.can_view_attendance_recap_driver'))
+
+    def get_can_view_dhcp_lease(self, obj):
+        return bool(obj.is_staff or obj.is_superuser or obj.has_perm('iclock.can_view_dhcp_lease'))
+
+    def get_can_view_fwfilter(self, obj):
+        return bool(obj.is_staff or obj.is_superuser or obj.has_perm('iclock.can_view_fwfilter'))
+
+    def get_can_view_netwatch(self, obj):
+        return bool(obj.is_staff or obj.is_superuser or obj.has_perm('iclock.can_view_netwatch'))
 
 
 class LoginSerializer(serializers.Serializer):
