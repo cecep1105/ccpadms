@@ -1210,7 +1210,7 @@ def attendance_recap(request):
     if pin_exact:
         return redirect('iclock:attendance_recap_employee_card', pin=pin_exact)
 
-    form = AttendanceRecapFilterForm(request.GET or None)
+    form = AttendanceRecapFilterForm(request.GET or None, user=request.user)
     page_size = _resolve_page_size(request)
 
     queried = bool(request.GET.get('date_from') and request.GET.get('date_to'))

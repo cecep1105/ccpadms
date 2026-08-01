@@ -423,9 +423,26 @@ class AttendanceRecapFilterForm(forms.Form):
         label='To', widget=forms.DateInput(attrs={'type': 'date', 'class': INPUT_CLS}),
     )
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['function'].choices = _device_function_choices(empty_label='-- Semua Function --')
+        function_choices = _device_function_choices(empty_label='-- Semua Function --')
+        # Kode Function KANTIN/DRIVER-* disembunyikan dari dropdown ini
+        # kalau `user` TIDAK punya izin granular yang sesuai
+        # (can_view_attendance_recap_kantin/_driver) -- MESKI dia punya
+        # akses ke tab "All" itu sendiri (bisa saja punya izin All TANPA
+        # izin Driver, mis.) -- SAMA perilaku dgn versi Next.js
+        # (RecapFilterBar.tsx). Kode LAIN (KARYAWAN/YAYASAN/BHL/dst)
+        # SELALU tampil, tidak terkait izin granular Kantin/Driver.
+        # `user=None` (dipanggil dari tempat LAIN yg BUKAN view
+        # attendance_recap, kalau ada) -- TIDAK difilter sama sekali,
+        # fail-open ke perilaku LAMA (semua kode tampil).
+        if user is not None:
+            from .services import has_attendance_recap_permission
+            if not has_attendance_recap_permission(user, 'kantin'):
+                function_choices = [(k, v) for k, v in function_choices if v != 'KANTIN']
+            if not has_attendance_recap_permission(user, 'driver'):
+                function_choices = [(k, v) for k, v in function_choices if not v.startswith('DRIVER')]
+        self.fields['function'].choices = function_choices
 
         # Device di-scope ke Pool yang dipilih (kalau ada), sama seperti pola
         # dependent-dropdown Pool -> Target Device di form Transfer Finger.
