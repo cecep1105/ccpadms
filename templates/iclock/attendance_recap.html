@@ -45,7 +45,7 @@
             class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium inline-flex items-center gap-2">
       <span id="recapQueryLabel">Query</span>
     </button>
-    <button type="submit" formaction="{% url 'iclock:attendance_recap_export' %}"
+    <button type="submit" id="recapExportBtn" formaction="{% url 'iclock:attendance_recap_export' %}"
             class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium inline-flex items-center gap-2"
             title="Export hasil (SEMUA baris yg cocok filter, bukan cuma halaman ini) ke .xlsx">
       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
@@ -150,12 +150,39 @@ document.addEventListener('DOMContentLoaded', () => {
   const overlay = document.getElementById('recapLoadingOverlay');
   const btn = document.getElementById('recapQueryBtn');
   const label = document.getElementById('recapQueryLabel');
+  const exportBtn = document.getElementById('recapExportBtn');
   if (form && overlay && btn) {
-    form.addEventListener('submit', () => {
+    form.addEventListener('submit', (e) => {
+      // KOREKSI: tombol "Export XLSX" (formaction TERPISAH, download
+      // file) JUGA memicu event 'submit' form ini -- BUG YANG SEMPAT
+      // TERJADI: overlay ini SEBELUMNYA ditampilkan utk SEMUA submit
+      // tanpa pengecualian, TAPI download file TIDAK BIKIN HALAMAN
+      // NAVIGASI/RELOAD (beda dari tombol "Query" yg emang pindah
+      // halaman) -- jadi TIDAK ADA momen apa pun yg menyembunyikan
+      // overlay itu lagi, macet tampil terus. `e.submitter` (didukung
+      // browser modern) kasih tahu tombol MANA yg sungguh diklik --
+      // kalau itu tombol export, overlay besar ini DILEWATI SAMA
+      // SEKALI (ada feedback KECIL sendiri di tombolnya, lihat bawah).
+      if (e.submitter && e.submitter.id === 'recapExportBtn') return;
       overlay.classList.remove('hidden');
       btn.disabled = true;
       btn.classList.add('opacity-70', 'cursor-not-allowed');
       if (label) label.textContent = 'Memuat...';
+    });
+  }
+  if (exportBtn) {
+    exportBtn.addEventListener('click', () => {
+      // Feedback KECIL & SELALU TER-RESET SENDIRI (setTimeout, BUKAN
+      // nunggu sinyal "download selesai" -- browser TIDAK kasih event
+      // spt itu utk download biasa lewat form submit) -- durasi cukup
+      // utk kasih tahu user klik-nya "kerasa", TIDAK macet spt overlay
+      // besar di atas.
+      exportBtn.disabled = true;
+      exportBtn.classList.add('opacity-70', 'cursor-not-allowed');
+      setTimeout(() => {
+        exportBtn.disabled = false;
+        exportBtn.classList.remove('opacity-70', 'cursor-not-allowed');
+      }, 2500);
     });
   }
 
