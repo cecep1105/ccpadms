@@ -379,6 +379,27 @@ class BackupFingerForm(forms.Form):
 class AttendanceRecapFilterForm(forms.Form):
     """Filter untuk halaman Attendance Recap (Rekap Kehadiran)."""
 
+    # Field HIDDEN -- WAJIB supaya `recap_type` (all/kantin/driver, lihat
+    # iclock/views.py::attendance_recap) TIDAK HILANG begitu form ini
+    # disubmit. BUG YANG SEMPAT TERJADI: form ini pakai method="get" biasa
+    # -- begitu disubmit, browser MENGGANTI SELURUH query string dgn CUMA
+    # field-field form ini, parameter URL LAIN yang BUKAN field form
+    # (termasuk `recap_type`, yang datang dari link card di halaman utama,
+    # BUKAN dari form ini) IKUT HILANG. Akibatnya: user klik card "Rekap
+    # Kantin" (URL `?recap_type=kantin`), halaman kebuka normal, TAPI
+    # begitu isi tanggal/pilih Function & submit form, `recap_type` lenyap
+    # dari URL, balik ke default 'all' -- data yg tampil jadi "recap full"
+    # (bukan Kantin lagi), dan kalau user TIDAK py izin 'all', permission
+    # check di view MENOLAK akses sama sekali ("Anda tidak memiliki
+    # akses..."), padahal user SEBENARNYA cuma buka rekap Kantin yg
+    # MEMANG dia diizinkan. Field hidden INI (dgn value dari `request.GET`
+    # otomatis, krn form-nya BOUND ke request.GET) memastikan `recap_type`
+    # IKUT TERKIRIM di setiap submit form, bukan cuma di link awal.
+    recap_type = forms.ChoiceField(
+        choices=[('all', 'All'), ('kantin', 'Kantin'), ('driver', 'Driver')],
+        required=False, initial='all', widget=forms.HiddenInput(),
+    )
+
     # PIN diletakkan PALING PERTAMA (posisi paling kiri di form) sesuai
     # permintaan. `pin` = free text (dipakai sbg regex kalau tidak pilih
     # lookup), `pin_exact` = hidden field, diisi JS cuma kalau user benar2
