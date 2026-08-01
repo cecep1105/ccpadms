@@ -67,7 +67,7 @@ class ActiveDeviceForm(forms.ModelForm):
     class Meta:
         model = iclock
         fields = [
-            'SN', 'Alias', 'DeptID', 'Function', 'IPAddress', 'MAC', 'TZAdj',
+            'SN', 'Alias', 'DeviceName', 'DeptID', 'Function', 'IPAddress', 'MAC', 'TZAdj',
             # Konfigurasi PUSH SDK per-device (test/myrule.md Rule 2) --
             # dikirim ke device sbg respons GET /iclock/cdata?options=all.
             'LogStamp', 'OpLogStamp', 'PhotoStamp', 'TransTimes', 'TransInterval',
@@ -76,6 +76,7 @@ class ActiveDeviceForm(forms.ModelForm):
         widgets = {
             'SN': _text(placeholder='Serial number mesin'),
             'Alias': _text(placeholder='Nama alias device'),
+            'DeviceName': _text(placeholder='Nama device'),
             'DeptID': _select(),
             'IPAddress': _text(placeholder='192.168.1.100'),
             'MAC': _text(placeholder='00:11:22:33:44:55'),

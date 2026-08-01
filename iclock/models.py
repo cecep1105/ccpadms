@@ -137,7 +137,7 @@ class iclock(models.Model):
     TZAdj = models.SmallIntegerField(_('Timezone Offset'), default=8, null=True, blank=True)
 
     Function = models.CharField(_('Function'), max_length=20, null=True, blank=True, default='0')
-    DeviceName = models.CharField(_('Device Name'), max_length=30, null=True, blank=True, editable=False)
+    DeviceName = models.CharField(_('Device Name'), max_length=30, null=True, blank=True, editable=True)
 
     # Field telemetry yang biasanya diisi otomatis oleh proses komunikasi
     # device (bukan diedit manual admin), jadi tidak dimasukkan ke form CRUD.

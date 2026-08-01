@@ -94,7 +94,7 @@ class DepartmentViewSet(BaseIclockViewSet):
 class ActiveDeviceViewSet(BaseIclockViewSet):
     queryset = iclock.objects.select_related('DeptID').all().order_by('Alias')
     serializer_class = ActiveDeviceSerializer
-    search_fields = ['SN', 'Alias']
+    search_fields = ['SN', 'Alias','DeviceName']  # Alias & DeviceName sama-sama dicari utk ?q=, walau di DB beda kolom
 
     # -----------------------------------------------------------------
     # Aksi device (pyzk, koneksi LANGSUNG ke device fisik) -- reuse fungsi
@@ -602,8 +602,8 @@ class PoolDeviceChoicesAPIView(APIView):
 
         pool_id = request.query_params.get('pool_id')
         if pool_id:
-            devices = list(iclock.objects.filter(DeptID_id=pool_id).order_by('Alias').values('SN', 'Alias'))
-            data['devices'] = [{'sn': d['SN'], 'name': d['Alias']} for d in devices]
+            devices = list(iclock.objects.filter(DeptID_id=pool_id).order_by('Alias').values('SN', 'Alias', 'DeviceName'))
+            data['devices'] = [{'sn': d['SN'], 'name': d['Alias'], 'device_name': d['DeviceName']} for d in devices]
 
         return Response(data)
 

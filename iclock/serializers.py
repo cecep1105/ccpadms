@@ -28,7 +28,7 @@ class ActiveDeviceSerializer(serializers.ModelSerializer):
     class Meta:
         model = iclock
         fields = [
-            'SN', 'Alias', 'DeptID', 'DeptName', 'Function', 'IPAddress', 'MAC', 'TZAdj',
+            'SN', 'Alias','DeviceName', 'DeptID', 'DeptName', 'Function', 'IPAddress', 'MAC', 'TZAdj',
             'State', 'LastActivity', 'LastData', 'PushVersion',
             # Konfigurasi PUSH SDK per-device (test/myrule.md Rule 2) --
             # disamakan dgn ActiveDeviceForm supaya API & dashboard konsisten.
