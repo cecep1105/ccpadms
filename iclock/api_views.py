@@ -554,12 +554,24 @@ class DeviceFunctionChoicesAPIView(APIView):
     """
     GET /api/v1/iclock/device-function-choices/ -- daftar {value, label}
     dari settings.DEVICEFUNCTION, dipakai isi dropdown Function code
-    (Active Device, Attendance Recap, dst) supaya SELALU sinkron dgn
-    konfigurasi backend -- SEBELUMNYA field ini plain text input di
-    frontend (rawan salah ketik, & admin harus HAPAL kode apa saja yang
-    valid).
+    (Active Device, Attendance Recap DASHBOARD & PORTAL, dst) supaya
+    SELALU sinkron dgn konfigurasi backend -- SEBELUMNYA field ini plain
+    text input di frontend (rawan salah ketik, & admin harus HAPAL kode
+    apa saja yang valid).
+
+    Izin akses diperluas dari SEBELUMNYA staff-only -- user non-staff yg
+    py izin granular Rekap Absensi (All/Kantin/Driver) SEKARANG JUGA
+    perlu endpoint ini (halaman portal /portal/attendance-recap, dropdown
+    Function baru utk user izin 'All'). Response TETAP kirim SEMUA kode
+    apa adanya (TIDAK difilter di sini) -- penyaringan kode KANTIN/DRIVER-*
+    sesuai izin granular user dikerjakan di FRONTEND (RecapFilterBar.tsx/
+    PortalRecapFilterBar.tsx), SAMA persis pola kedua tempat itu, supaya
+    logic filter-nya di 1 tempat per platform (React), bukan dobel di
+    backend & frontend.
     """
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    permission_classes = [IsAuthenticated, HasFeaturePermission(
+        'iclock.can_view_attendance_recap', 'iclock.can_view_attendance_recap_kantin', 'iclock.can_view_attendance_recap_driver',
+    )]
 
     def get(self, request):
         choices = [{'value': k, 'label': f'{k} — {v}'} for k, v in settings.DEVICEFUNCTION.items()]
