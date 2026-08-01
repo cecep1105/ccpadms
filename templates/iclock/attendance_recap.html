@@ -153,36 +153,41 @@ document.addEventListener('DOMContentLoaded', () => {
   const exportBtn = document.getElementById('recapExportBtn');
   if (form && overlay && btn) {
     form.addEventListener('submit', (e) => {
-      // KOREKSI: tombol "Export XLSX" (formaction TERPISAH, download
-      // file) JUGA memicu event 'submit' form ini -- BUG YANG SEMPAT
-      // TERJADI: overlay ini SEBELUMNYA ditampilkan utk SEMUA submit
-      // tanpa pengecualian, TAPI download file TIDAK BIKIN HALAMAN
-      // NAVIGASI/RELOAD (beda dari tombol "Query" yg emang pindah
-      // halaman) -- jadi TIDAK ADA momen apa pun yg menyembunyikan
-      // overlay itu lagi, macet tampil terus. `e.submitter` (didukung
-      // browser modern) kasih tahu tombol MANA yg sungguh diklik --
-      // kalau itu tombol export, overlay besar ini DILEWATI SAMA
-      // SEKALI (ada feedback KECIL sendiri di tombolnya, lihat bawah).
-      if (e.submitter && e.submitter.id === 'recapExportBtn') return;
+      // Tombol "Export XLSX" (formaction TERPISAH, download file) JUGA
+      // memicu event 'submit' form ini -- overlay besar ini TIDAK
+      // relevan utk export (download file TIDAK bikin halaman navigasi/
+      // reload spt tombol "Query", jadi overlay itu TIDAK PERNAH ada
+      // momen disembunyikan lagi kalau ikut ditampilkan). `e.submitter`
+      // (didukung browser modern) kasih tahu tombol MANA yg sungguh
+      // diklik -- kalau export, lompat ke blok KHUSUS export di bawah.
+      if (e.submitter && e.submitter.id === 'recapExportBtn') {
+        // ⚠️ KOREKSI PENTING (bug produksi yg SEMPAT terjadi): TIDAK
+        // BOLEH set `exportBtn.disabled = true` LANGSUNG DI SINI --
+        // form SEDANG DALAM PROSES submit SAAT event ini jalan,
+        // menonaktifkan tombol PEMICU submission ITU SENDIRI secara
+        // SINKRON (synchronous, di tick JS yg SAMA) bisa BIKIN BROWSER
+        // MEMBATALKAN submission yg SEDANG BERLANGSUNG (tombol yg jadi
+        // "submitter"-nya keburu disabled sebelum request sungguh
+        // terkirim) -- persis gejala yg dilaporkan: klik tidak
+        // melakukan apa pun, kursor jadi ikon forbidden (krn elemen
+        // disabled), tapi FILE TIDAK PERNAH TERUNDUH. `setTimeout(...,0)`
+        // DORONG eksekusi disable ini ke tick BERIKUTNYA -- browser
+        // SUDAH SELESAI memproses & mengirim submission SEBELUM baris
+        // disable ini sungguh jalan, jadi TIDAK mengganggu apa pun lagi.
+        setTimeout(() => {
+          exportBtn.disabled = true;
+          exportBtn.classList.add('opacity-70', 'cursor-not-allowed');
+          setTimeout(() => {
+            exportBtn.disabled = false;
+            exportBtn.classList.remove('opacity-70', 'cursor-not-allowed');
+          }, 2500);
+        }, 0);
+        return;
+      }
       overlay.classList.remove('hidden');
       btn.disabled = true;
       btn.classList.add('opacity-70', 'cursor-not-allowed');
       if (label) label.textContent = 'Memuat...';
-    });
-  }
-  if (exportBtn) {
-    exportBtn.addEventListener('click', () => {
-      // Feedback KECIL & SELALU TER-RESET SENDIRI (setTimeout, BUKAN
-      // nunggu sinyal "download selesai" -- browser TIDAK kasih event
-      // spt itu utk download biasa lewat form submit) -- durasi cukup
-      // utk kasih tahu user klik-nya "kerasa", TIDAK macet spt overlay
-      // besar di atas.
-      exportBtn.disabled = true;
-      exportBtn.classList.add('opacity-70', 'cursor-not-allowed');
-      setTimeout(() => {
-        exportBtn.disabled = false;
-        exportBtn.classList.remove('opacity-70', 'cursor-not-allowed');
-      }, 2500);
     });
   }
 
