@@ -721,4 +721,6 @@ class FeaturePermission(models.Model):
             ('can_view_ad_groups', 'Bisa melihat Groups (Active Directory)'),
             ('can_view_zentyal_users', 'Bisa melihat & Kelola Users (Mail Server / Zentyal)'),
             ('can_view_zentyal_groups', 'Bisa melihat Groups (Mail Server / Zentyal)'),
+            ('can_view_cloudflare', 'Bisa melihat & Kelola DNS Record - Tanpa Hapus (Cloudflare)'),
+            ('can_view_itinfra', 'Bisa melihat Data IT-Infra (kecuali entry Staff Only)'),
         ]

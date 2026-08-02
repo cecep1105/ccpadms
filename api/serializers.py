@@ -19,6 +19,8 @@ class UserSerializer(serializers.ModelSerializer):
     can_view_ad_groups = serializers.SerializerMethodField()
     can_view_zentyal_users = serializers.SerializerMethodField()
     can_view_zentyal_groups = serializers.SerializerMethodField()
+    can_view_cloudflare = serializers.SerializerMethodField()
+    can_view_itinfra = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -40,6 +42,7 @@ class UserSerializer(serializers.ModelSerializer):
             'can_view_dhcp_lease', 'can_view_fwfilter', 'can_view_netwatch',
             'can_view_ad_users', 'can_view_ad_locked_users', 'can_view_ad_dns', 'can_view_ad_groups',
             'can_view_zentyal_users', 'can_view_zentyal_groups',
+            'can_view_cloudflare', 'can_view_itinfra',
         ]
         read_only_fields = [
             'id', 'username', 'auth_source', 'is_superuser', 'created_at', 'updated_at',
@@ -48,6 +51,7 @@ class UserSerializer(serializers.ModelSerializer):
             'can_view_dhcp_lease', 'can_view_fwfilter', 'can_view_netwatch',
             'can_view_ad_users', 'can_view_ad_locked_users', 'can_view_ad_dns', 'can_view_ad_groups',
             'can_view_zentyal_users', 'can_view_zentyal_groups',
+            'can_view_cloudflare', 'can_view_itinfra',
         ]
 
     def get_can_transfer_finger(self, obj):
@@ -88,6 +92,12 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_can_view_zentyal_groups(self, obj):
         return bool(obj.is_staff or obj.is_superuser or obj.has_perm('iclock.can_view_zentyal_groups'))
+
+    def get_can_view_cloudflare(self, obj):
+        return bool(obj.is_staff or obj.is_superuser or obj.has_perm('iclock.can_view_cloudflare'))
+
+    def get_can_view_itinfra(self, obj):
+        return bool(obj.is_staff or obj.is_superuser or obj.has_perm('iclock.can_view_itinfra'))
 
 
 class LoginSerializer(serializers.Serializer):

@@ -69,6 +69,14 @@ class ITInfraEntry(models.Model):
     name = models.CharField(_('Nama'), max_length=150, help_text=_('Label pengenal entry ini, mis. "Internet Kantor Pusat - Biznet"'))
     data_encrypted = models.TextField(_('Data (terenkripsi)'), blank=True, editable=False)
     notes = models.TextField(_('Catatan'), blank=True)
+    # Kalau True, entry ini CUMA muncul/bisa diakses staff/admin -- user
+    # portal non-staff (walau py izin granular can_view_itinfra) TIDAK
+    # akan MELIHAT entry ini SAMA SEKALI (disaring dari list) & DITOLAK
+    # kalau coba akses detail-nya langsung (lihat netmgmt/itinfra_view.py::
+    # ITInfraEntryListView/ITInfraEntryDetailView) -- utk entry yg memang
+    # PALING SENSITIF (mis. kredensial infrastruktur inti) yg admin TIDAK
+    # mau tampil ke portal SAMA SEKALI, terlepas dari izin granular umum.
+    is_staff_only = models.BooleanField(_('Staff Only'), default=False, help_text=_('Kalau dicentang, entry ini HANYA bisa dilihat staff/admin -- tersembunyi dari user portal non-staff meski mereka punya izin akses fitur ini.'))
     created_at = models.DateTimeField(_('Dibuat'), auto_now_add=True)
     updated_at = models.DateTimeField(_('Diperbarui'), auto_now=True)
 

@@ -19,11 +19,10 @@ lalu pagination/sort/filter dikerjakan ULANG di sini.
 import requests
 from django.conf import settings
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from api.permissions import IsStaffRole
 from netmgmt.crypto_utils import NetmgmtCryptoError, decrypt_cloudflare_token
 from netmgmt.list_utils import paginate_sort_filter, parse_list_params
 
@@ -36,6 +35,31 @@ SUPPORTED_RECORD_TYPES = {'A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS'}
 # lintas dirutekan lewat Cloudflare CDN/proteksi) -- CUMA berlaku utk
 # record yang menunjuk ke ALAMAT/HOST (A/AAAA/CNAME), TIDAK utk MX/TXT/NS.
 PROXIABLE_RECORD_TYPES = {'A', 'AAAA', 'CNAME'}
+
+
+class HasCloudflarePermission(BasePermission):
+    """
+    Staff/superuser SELALU lolos. User non-staff dgn izin granular
+    'can_view_cloudflare' BOLEH GET (lihat zone/record) & POST action
+    'add'/'edit', TAPI DITOLAK utk action 'delete' -- sesuai batasan yg
+    disepakati (portal BISA tambah/edit DNS record, TIDAK BISA hapus).
+    CloudflareDnsRecordActionView SATU CLASS menangani KETIGA aksi (beda
+    dari Mikrotik Netwatch yg sengaja endpoint delete-nya TIDAK ADA sama
+    sekali) -- jadi pengecekan `action`-nya WAJIB di sini, permission
+    CLASS-LEVEL biasa tidak bisa lihat isi body request.
+    """
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not (user and user.is_authenticated):
+            return False
+        if user.is_staff or user.is_superuser:
+            return True
+        if not user.has_perm('iclock.can_view_cloudflare'):
+            return False
+        if request.method == 'POST' and request.data.get('action') == 'delete':
+            return False
+        return True
 
 
 class CloudflareAPIError(Exception):
@@ -106,7 +130,7 @@ def _fetch_all_pages(path: str, params: dict | None = None) -> list:
 
 class CloudflareZoneListView(APIView):
     """GET /api/v1/netmgmt/cloudflare/zones/?_page=&_limit=&_sort_by=&_order=&_q= -- daftar domain (zone) yang bisa diakses token ini."""
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    permission_classes = [IsAuthenticated, HasCloudflarePermission]
 
     def get(self, request):
         try:
@@ -125,7 +149,7 @@ class CloudflareZoneListView(APIView):
 
 class CloudflareDnsRecordListView(APIView):
     """GET /api/v1/netmgmt/cloudflare/zones/<zone_id>/records/?_page=&_limit=&_sort_by=&_order=&_q= -- daftar DNS record 1 zone."""
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    permission_classes = [IsAuthenticated, HasCloudflarePermission]
 
     def get(self, request, zone_id=None):
         try:
@@ -157,8 +181,11 @@ class CloudflareDnsRecordActionView(APIView):
     Body tambah: {"action": "add", "type": "A", "name": "www", "content": "1.2.3.4", "ttl": 3600, "proxied": false}
     Body edit:   {"action": "edit", "record_id": "...", "type": "A", "name": "www", "content": "1.2.3.4", "ttl": 3600, "proxied": false}
     Body hapus:  {"action": "delete", "record_id": "..."}
+
+    Izin granular portal (can_view_cloudflare) BOLEH add/edit, DITOLAK
+    utk delete -- lihat HasCloudflarePermission di atas.
     """
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    permission_classes = [IsAuthenticated, HasCloudflarePermission]
 
     def post(self, request, zone_id=None):
         action = request.data.get('action')

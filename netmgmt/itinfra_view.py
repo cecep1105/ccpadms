@@ -12,13 +12,14 @@ supaya password TIDAK nampang di response daftar (mis. kalau user buka
 Network tab browser pas cuma mau lihat daftar, tidak otomatis lihat
 SEMUA password sekaligus).
 """
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from api.permissions import IsStaffRole
+from api.permissions import HasFeaturePermission, IsStaffRole
 from netmgmt.list_utils import paginate_sort_filter, parse_list_params
 from netmgmt.models import ITInfraCategory, ITInfraEntry
 
@@ -27,6 +28,13 @@ class ITInfraCategoryListView(APIView):
     """
     GET  /api/v1/netmgmt/itinfra/categories/ -- daftar kategori (utk dropdown).
     POST /api/v1/netmgmt/itinfra/categories/ -- {"name": "..."} -- tambah kategori baru.
+
+    TETAP staff-only (TIDAK diperluas ke izin portal can_view_itinfra) --
+    view GET+POST ini SATU CLASS (permission SAMA utk keduanya), & POST
+    (bikin kategori baru) di LUAR cakupan portal yang disepakati (view
+    only). Halaman portal TIDAK butuh dropdown kategori (tidak ada form
+    tambah/edit di sana) -- cari kategori tetap bisa lewat search bar
+    biasa (category_name SUDAH ikut di _entry_to_summary()).
     """
     permission_classes = [IsAuthenticated, IsStaffRole]
 
@@ -52,19 +60,29 @@ def _entry_to_summary(entry: ITInfraEntry) -> dict:
         'category_name': entry.category.name,
         'name': entry.name,
         'notes': entry.notes,
+        'is_staff_only': entry.is_staff_only,
         'updated_at': entry.updated_at.isoformat(),
     }
 
 
 class ITInfraEntryListView(APIView):
-    """GET /api/v1/netmgmt/itinfra/entries/?category_id=&_page=&_limit=&_sort_by=&_order=&_q= -- daftar entry (TANPA isi `data`, lihat catatan keamanan)."""
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    """
+    GET /api/v1/netmgmt/itinfra/entries/?category_id=&_page=&_limit=&_sort_by=&_order=&_q=
+    -- daftar entry (TANPA isi `data`, lihat catatan keamanan).
+
+    User NON-STAFF (izin portal can_view_itinfra) TIDAK MELIHAT entry yg
+    is_staff_only=True SAMA SEKALI -- difilter di QUERYSET (bukan cuma
+    disembunyikan di UI), staff/superuser lihat SEMUA seperti biasa.
+    """
+    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_itinfra')]
 
     def get(self, request):
         qs = ITInfraEntry.objects.select_related('category').all()
         category_id = request.query_params.get('category_id')
         if category_id:
             qs = qs.filter(category_id=category_id)
+        if not (request.user.is_staff or request.user.is_superuser):
+            qs = qs.filter(is_staff_only=False)
 
         entries = [_entry_to_summary(e) for e in qs]
         params = parse_list_params(request)
@@ -75,11 +93,21 @@ class ITInfraEntryListView(APIView):
 
 
 class ITInfraEntryDetailView(APIView):
-    """GET /api/v1/netmgmt/itinfra/entries/<id>/ -- 1 entry LENGKAP termasuk `data` ter-dekripsi (lihat catatan keamanan di docstring modul)."""
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    """
+    GET /api/v1/netmgmt/itinfra/entries/<id>/ -- 1 entry LENGKAP termasuk `data` ter-dekripsi (lihat catatan keamanan di docstring modul).
+
+    User NON-STAFF DITOLAK (404, BUKAN 403 -- supaya TIDAK MEMBOCORKAN
+    bahwa entry ini ADA tapi disembunyikan, cukup terlihat spt entry ID
+    itu memang tidak ada) kalau entry yang diminta is_staff_only=True,
+    MESKI mereka py izin portal can_view_itinfra -- filter INI per-entry,
+    DI ATAS izin granular umum.
+    """
+    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_itinfra')]
 
     def get(self, request, entry_id=None):
         entry = get_object_or_404(ITInfraEntry, id=entry_id)
+        if entry.is_staff_only and not (request.user.is_staff or request.user.is_superuser):
+            raise Http404
         return Response({
             'id': entry.id,
             'category_id': entry.category_id,
@@ -87,6 +115,7 @@ class ITInfraEntryDetailView(APIView):
             'name': entry.name,
             'data': entry.get_data(),
             'notes': entry.notes,
+            'is_staff_only': entry.is_staff_only,
             'updated_at': entry.updated_at.isoformat(),
         }, status=status.HTTP_200_OK)
 
@@ -112,6 +141,7 @@ class ITInfraEntryActionView(APIView):
         name = (request.data.get('name') or '').strip()
         data_dict = request.data.get('data')
         notes = request.data.get('notes') or ''
+        is_staff_only = bool(request.data.get('is_staff_only', False))
 
         if not category_id:
             return Response({'error': "'category_id' wajib diisi."}, status=status.HTTP_400_BAD_REQUEST)
@@ -123,7 +153,7 @@ class ITInfraEntryActionView(APIView):
         category = get_object_or_404(ITInfraCategory, id=category_id)
 
         if action == 'add':
-            entry = ITInfraEntry(category=category, name=name, notes=notes)
+            entry = ITInfraEntry(category=category, name=name, notes=notes, is_staff_only=is_staff_only)
             entry.set_data(data_dict)
             entry.save()
             return Response({'success': True, 'message': 'Data berhasil ditambahkan.', 'id': entry.id}, status=status.HTTP_201_CREATED)
@@ -136,6 +166,7 @@ class ITInfraEntryActionView(APIView):
         entry.category = category
         entry.name = name
         entry.notes = notes
+        entry.is_staff_only = is_staff_only
         entry.set_data(data_dict)
         entry.save()
         return Response({'success': True, 'message': 'Data berhasil diperbarui.'}, status=status.HTTP_200_OK)
