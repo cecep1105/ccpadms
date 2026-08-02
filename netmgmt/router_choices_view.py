@@ -15,7 +15,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from api.permissions import IsStaffRole
+from api.permissions import HasFeaturePermission, IsStaffRole
 from iclock.models import RegisteredDevice
 
 from .models import NetmgmtRouterDefault
@@ -27,7 +27,7 @@ class RouterChoicesView(APIView):
     UNIK dari RegisteredDevice.IPRouter (device dgn IPRouter kosong
     dilewati -- tidak berguna sbg pilihan router).
     """
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    permission_classes = [IsAuthenticated & (IsStaffRole | HasFeaturePermission('iclock.can_view_fwfilter'))]
 
     def get(self, request):
         devices = (
