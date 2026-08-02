@@ -21,6 +21,7 @@ class UserSerializer(serializers.ModelSerializer):
     can_view_zentyal_groups = serializers.SerializerMethodField()
     can_view_cloudflare = serializers.SerializerMethodField()
     can_view_itinfra = serializers.SerializerMethodField()
+    has_employee_link = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -42,7 +43,7 @@ class UserSerializer(serializers.ModelSerializer):
             'can_view_dhcp_lease', 'can_view_fwfilter', 'can_view_netwatch',
             'can_view_ad_users', 'can_view_ad_locked_users', 'can_view_ad_dns', 'can_view_ad_groups',
             'can_view_zentyal_users', 'can_view_zentyal_groups',
-            'can_view_cloudflare', 'can_view_itinfra',
+            'can_view_cloudflare', 'can_view_itinfra', 'has_employee_link',
         ]
         read_only_fields = [
             'id', 'username', 'auth_source', 'is_superuser', 'created_at', 'updated_at',
@@ -51,7 +52,7 @@ class UserSerializer(serializers.ModelSerializer):
             'can_view_dhcp_lease', 'can_view_fwfilter', 'can_view_netwatch',
             'can_view_ad_users', 'can_view_ad_locked_users', 'can_view_ad_dns', 'can_view_ad_groups',
             'can_view_zentyal_users', 'can_view_zentyal_groups',
-            'can_view_cloudflare', 'can_view_itinfra',
+            'can_view_cloudflare', 'can_view_itinfra', 'has_employee_link',
         ]
 
     def get_can_transfer_finger(self, obj):
@@ -98,6 +99,18 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_can_view_itinfra(self, obj):
         return bool(obj.is_staff or obj.is_superuser or obj.has_perm('iclock.can_view_itinfra'))
+
+    def get_has_employee_link(self, obj):
+        """
+        True kalau akun ini TERKAIT ke 1 data Employee (accounts.User.EmpID,
+        lihat catatan lengkap di accounts/models.py) -- dipakai frontend
+        Next.js utk tahu apakah kartu/menu "My Attendance" perlu
+        ditampilkan (lihat iclock/api_views.py::MyAttendanceCardAPIView) --
+        SENGAJA cuma True/False (BUKAN PIN-nya sendiri) -- PIN tidak perlu
+        bocor ke session/frontend, backend cukup lookup ULANG dari
+        `request.user.EmpID` tiap request ke endpoint itu.
+        """
+        return obj.EmpID_id is not None
 
 
 class LoginSerializer(serializers.Serializer):

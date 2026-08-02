@@ -744,3 +744,73 @@ class AttendanceRecapEmployeeCardAPIView(APIView):
             'month': month,
             'rows': rows,
         })
+
+
+class MyAttendanceCardAPIView(APIView):
+    """
+    GET /api/v1/iclock/my-attendance/?year=&month=
+    Versi SELF-SERVICE dari AttendanceRecapEmployeeCardAPIView di atas
+    (SAMA PERSIS bentuk response & logic query-nya, SENGAJA sedikit
+    duplikasi drpd refactor berisiko ke view yg SUDAH jalan) -- BEDA
+    utama:
+    - TIDAK BUTUH parameter <pin> di URL & TIDAK BUTUH permission
+      granular can_view_attendance_recap SAMA SEKALI -- endpoint ini
+      utk lihat data ABSENSI DIRI SENDIRI, konsepnya beda TOTAL dari
+      "lihat rekap absensi ORANG LAIN" (itu yg granular permission-nya
+      atur). Employee yg dilihat ditentukan LANGSUNG dari
+      `request.user.EmpID` (link opsional User<->Employee, lihat
+      accounts/models.py), BUKAN dari input user -- TIDAK ADA CARA
+      user portal minta data absensi PIN/employee LAIN lewat endpoint
+      ini (beda dari endpoint umum yg terima <pin> bebas).
+    - User yang akunnya TIDAK py EmpID (belum dikaitkan ke data
+      employee) dapat 404 dgn pesan jelas (BUKAN 403 -- ini bukan soal
+      "tidak diizinkan", tapi "datanya memang belum ada/terkait").
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from calendar import monthrange
+
+        emp = request.user.EmpID
+        if emp is None:
+            return Response(
+                {'code': 'not_linked', 'message': 'Akun Anda belum terkait dengan data Employee (PIN absensi). Hubungi admin untuk mengaitkan akun Anda.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        today = date.today()
+        try:
+            year = int(request.query_params.get('year', today.year))
+            month = int(request.query_params.get('month', today.month))
+            if month < 1 or month > 12:
+                raise ValueError
+        except (TypeError, ValueError):
+            year, month = today.year, today.month
+
+        first_day = date(year, month, 1)
+        last_day = date(year, month, monthrange(year, month)[1])
+
+        qs = (
+            transaction.objects.filter(UserID=emp, TTime__date__gte=first_day, TTime__date__lte=last_day)
+            .select_related('SN')
+            .order_by('TTime')
+        )
+        rows = []
+        for trx in qs:
+            local_time = _to_local_time(trx.TTime)
+            if local_time is None:
+                continue
+            rows.append({
+                'date': local_time.date().isoformat(),
+                'time': local_time.isoformat(),
+                'device': str(trx.SN) if trx.SN_id else None,
+                'type': 'IN' if _is_in_state(trx.State) else 'OUT',
+            })
+
+        return Response({
+            'pin': emp.PIN,
+            'name': emp.EName,
+            'year': year,
+            'month': month,
+            'rows': rows,
+        })
