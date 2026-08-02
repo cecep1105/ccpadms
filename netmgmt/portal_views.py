@@ -73,6 +73,10 @@ class PortalDhcpLeaseListView(APIView):
         if not params['search_fields']:
             params['search_fields'] = ['address', 'mac-address', 'host-name']
         payload = paginate_sort_filter(rows, **params)
+        # Router IP INI (bukan dari staff RouterSelector) disertakan di
+        # payload supaya frontend TAHU router mana yg SEDANG dipakai
+        # (utk dropdown RouterSelector) -- SAMA pola dgn PortalFwFilterListView.
+        payload['router_ip'] = host
         return Response(payload, status=status.HTTP_200_OK)
 
 
