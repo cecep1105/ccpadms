@@ -715,4 +715,8 @@ class FeaturePermission(models.Model):
             ('can_view_dhcp_lease', 'Bisa melihat DHCP Lease (Mikrotik)'),
             ('can_view_fwfilter', 'Bisa melihat & Grant Access Firewall Filter (Mikrotik)'),
             ('can_view_netwatch', 'Bisa melihat & Kelola Netwatch (Mikrotik)'),
+            ('can_view_ad_users', 'Bisa melihat & Kelola Users (Active Directory)'),
+            ('can_view_ad_locked_users', 'Bisa melihat & Unlock Locked Users (Active Directory)'),
+            ('can_view_ad_dns', 'Bisa melihat DNS (Active Directory)'),
+            ('can_view_ad_groups', 'Bisa melihat Groups (Active Directory)'),
         ]

@@ -24,7 +24,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from api.permissions import IsStaffRole
+from api.permissions import HasFeaturePermission, IsStaffRole
 from netmgmt.crypto_utils import NetmgmtCryptoError, decrypt_ad_password
 from netmgmt.ldap_utils import LDAPManagementClient, LDAPManagementError
 from netmgmt.list_utils import paginate_sort_filter, parse_list_params
@@ -184,7 +184,7 @@ def get_recently_locked_users(minutes: int = 2) -> list:
 
 class ADUserListView(APIView):
     """GET /api/v1/netmgmt/ad/users/?_page=&_limit=&_sort_by=&_order=&_q=&_search_fields= -- daftar user AD."""
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_ad_users')]
 
     def get(self, request):
         try:
@@ -205,7 +205,7 @@ class ADUserListView(APIView):
 
 class ADGroupListView(APIView):
     """GET /api/v1/netmgmt/ad/groups/?_page=&_limit=&_sort_by=&_order=&_q=&_search_fields= -- daftar group AD."""
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_ad_groups')]
 
     def get(self, request):
         try:
@@ -226,7 +226,7 @@ class ADGroupListView(APIView):
 
 class ADGroupMembersView(APIView):
     """GET /api/v1/netmgmt/ad/groups/<path:group_dn>/members/ -- daftar user di dalam 1 group (LENGKAP, tanpa pagination -- biasanya jumlah member per group jauh lebih sedikit drpd total user)."""
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_ad_groups')]
 
     def get(self, request, group_dn=None):
         try:
@@ -294,7 +294,7 @@ class ADResetPasswordView(APIView):
     kode ini -- kalau AD_USE_SSL=False di .env, operasi ini AKAN GAGAL,
     pesan errornya menyebutkan ini secara eksplisit.
     """
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_ad_users')]
 
     def post(self, request):
         user_dn = request.data.get('user_dn')
@@ -326,7 +326,7 @@ class ADUserToggleStatusView(APIView):
     DONT_EXPIRE_PASSWORD, dst -- TIDAK BOLEH ditimpa asal, cuma bit
     ACCOUNTDISABLE-nya saja yang diubah, sisanya PERSIS dipertahankan).
     """
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_ad_users')]
 
     def post(self, request):
         user_dn = request.data.get('user_dn')
@@ -356,7 +356,7 @@ class ADLockedUsersListView(APIView):
     TIDAK SALING TERKAIT (bisa aktif tapi terkunci, atau nonaktif tapi
     tidak pernah terkunci).
     """
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_ad_locked_users')]
 
     def get(self, request):
         try:
@@ -377,8 +377,13 @@ class ADUserUnlockView(APIView):
     Reset lockoutTime ke 0 -- cara STANDAR "unlock" akun AD yang terkunci
     otomatis (BUKAN ubah userAccountControl -- itu utk disable/enable
     MANUAL, konsep berbeda, lihat catatan di ADLockedUsersListView).
+
+    Izin OR (can_view_ad_users ATAU can_view_ad_locked_users) -- unlock
+    relevan dari KEDUA sudut pandang (halaman Users umum & halaman
+    khusus Locked Users), user portal yang cuma dikasih SALAH SATU dari
+    2 izin itu tetap bisa unlock.
     """
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_ad_users', 'iclock.can_view_ad_locked_users')]
 
     def post(self, request):
         user_dn = request.data.get('user_dn')

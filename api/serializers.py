@@ -13,6 +13,10 @@ class UserSerializer(serializers.ModelSerializer):
     can_view_dhcp_lease = serializers.SerializerMethodField()
     can_view_fwfilter = serializers.SerializerMethodField()
     can_view_netwatch = serializers.SerializerMethodField()
+    can_view_ad_users = serializers.SerializerMethodField()
+    can_view_ad_locked_users = serializers.SerializerMethodField()
+    can_view_ad_dns = serializers.SerializerMethodField()
+    can_view_ad_groups = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -32,12 +36,14 @@ class UserSerializer(serializers.ModelSerializer):
             'can_transfer_finger', 'can_view_attendance_recap',
             'can_view_attendance_recap_kantin', 'can_view_attendance_recap_driver',
             'can_view_dhcp_lease', 'can_view_fwfilter', 'can_view_netwatch',
+            'can_view_ad_users', 'can_view_ad_locked_users', 'can_view_ad_dns', 'can_view_ad_groups',
         ]
         read_only_fields = [
             'id', 'username', 'auth_source', 'is_superuser', 'created_at', 'updated_at',
             'can_transfer_finger', 'can_view_attendance_recap',
             'can_view_attendance_recap_kantin', 'can_view_attendance_recap_driver',
             'can_view_dhcp_lease', 'can_view_fwfilter', 'can_view_netwatch',
+            'can_view_ad_users', 'can_view_ad_locked_users', 'can_view_ad_dns', 'can_view_ad_groups',
         ]
 
     def get_can_transfer_finger(self, obj):
@@ -60,6 +66,18 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_can_view_netwatch(self, obj):
         return bool(obj.is_staff or obj.is_superuser or obj.has_perm('iclock.can_view_netwatch'))
+
+    def get_can_view_ad_users(self, obj):
+        return bool(obj.is_staff or obj.is_superuser or obj.has_perm('iclock.can_view_ad_users'))
+
+    def get_can_view_ad_locked_users(self, obj):
+        return bool(obj.is_staff or obj.is_superuser or obj.has_perm('iclock.can_view_ad_locked_users'))
+
+    def get_can_view_ad_dns(self, obj):
+        return bool(obj.is_staff or obj.is_superuser or obj.has_perm('iclock.can_view_ad_dns'))
+
+    def get_can_view_ad_groups(self, obj):
+        return bool(obj.is_staff or obj.is_superuser or obj.has_perm('iclock.can_view_ad_groups'))
 
 
 class LoginSerializer(serializers.Serializer):

@@ -45,7 +45,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from api.permissions import IsStaffRole
+from api.permissions import HasFeaturePermission, IsStaffRole
 from ldap3 import MODIFY_ADD, MODIFY_DELETE
 from netmgmt.active_directory_view import _get_ad_client
 from netmgmt.dns_codec import (
@@ -92,7 +92,7 @@ class ADDNSZoneListView(APIView):
     zone reverse-lookup & zone bawaan AD (_msdcs, dst) DISEMBUNYIKAN
     (lihat _is_visible_forward_zone).
     """
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_ad_dns')]
 
     def get(self, request):
         zones = []
@@ -124,7 +124,7 @@ class ADDNSRecordListView(APIView):
     GET /api/v1/netmgmt/ad/dns/zones/<path:zone_dn>/records/?_page=&_limit=&_sort_by=&_order=&_q=&_search_fields=
     -- record di 1 zone, DIFILTER cuma tipe A & CNAME (lihat _VISIBLE_RECORD_TYPES).
     """
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_ad_dns')]
 
     def get(self, request, zone_dn=None):
         try:
