@@ -31,7 +31,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from api.permissions import HasFeaturePermission
+from api.permissions import HasFeaturePermission, IsStaffRole
 
 from .list_utils import paginate_sort_filter, parse_list_params
 from .models import NetmgmtRouterDefault
@@ -140,12 +140,14 @@ class PortalNetwatchActionView(APIView):
     POST /api/v1/netmgmt/portal/netwatch/action/
     Body: {"action": "add"|"edit", "host": "...", "comment": "...", "up-script": "...", "down-script": "...", "id"?: "...id RouterOS, WAJIB utk edit"}
 
-    ⚠️ CUMA 2 aksi (add/edit) -- SENGAJA TIDAK ADA delete (sesuai scope
-    yg diminta: "Add/Edit Netwatch host" doang utk portal, hapus TETAP
-    staff-only lewat halaman Mikrotik biasa) -- & TIDAK menerima
-    resource/command bebas spt proxy generik (`postcmd` dkk).
+    ⚠️ KOREKSI SCOPE: cakupan portal utk Netwatch DIUBAH jadi read-only
+    SEPENUHNYA (sebelumnya sempat izinkan add/edit) -- endpoint ini
+    SEKARANG staff-only lagi (TIDAK diperluas ke izin portal
+    can_view_netwatch), TIDAK dipanggil dari halaman portal manapun.
+    DIBIARKAN ADA (bukan dihapus) siapa tahu suatu saat scope-nya
+    diperluas lagi, tapi PER SEKARANG unreachable dari sisi portal.
     """
-    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_netwatch')]
+    permission_classes = [IsAuthenticated, IsStaffRole]
 
     def post(self, request):
         action = request.data.get('action')

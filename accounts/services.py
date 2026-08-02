@@ -333,7 +333,7 @@ FEATURE_PERMISSIONS = [
     ('iclock.can_view_attendance_recap_driver', 'can_view_attendance_recap_driver', 'Rekap Absensi - Driver'),
     ('iclock.can_view_dhcp_lease', 'can_view_dhcp_lease', 'DHCP Lease (Mikrotik)'),
     ('iclock.can_view_fwfilter', 'can_view_fwfilter', 'Firewall Filter - Lihat & Grant Access (Mikrotik)'),
-    ('iclock.can_view_netwatch', 'can_view_netwatch', 'Netwatch - Lihat & Kelola (Mikrotik)'),
+    ('iclock.can_view_netwatch', 'can_view_netwatch', 'Netwatch - Lihat (Mikrotik)'),
     ('iclock.can_view_ad_users', 'can_view_ad_users', 'Active Directory - Users (Lihat & Kelola)'),
     ('iclock.can_view_ad_locked_users', 'can_view_ad_locked_users', 'Active Directory - Locked Users (Lihat & Unlock)'),
     ('iclock.can_view_ad_dns', 'can_view_ad_dns', 'Active Directory - DNS (Lihat)'),
