@@ -38,8 +38,15 @@ from .models import NetmgmtRouterDefault
 from .routeros_api_view import MikrotikConnectionError, get_routeros_connection
 
 
-def _resolve_router_ip(page_key: str, env_fallback: str) -> str:
-    """NetmgmtRouterDefault (Django Admin) -> fallback env var -- SAMA prioritas dgn resolveRouterIp() versi Next.js (staff)."""
+def _resolve_router_ip(page_key: str, env_fallback: str, override: str | None = None) -> str:
+    """
+    Prioritas: `override` (dari ?router= query param, kalau user pilih
+    lewat dropdown RouterSelector) -> NetmgmtRouterDefault (Django Admin)
+    -> fallback env var -- SAMA PERSIS 3 tingkat prioritas dgn
+    resolveRouterIp() versi Next.js (staff).
+    """
+    if override:
+        return override
     default = NetmgmtRouterDefault.objects.filter(page_key=page_key).first()
     return default.router_ip if default else env_fallback
 
@@ -49,7 +56,7 @@ class PortalDhcpLeaseListView(APIView):
     permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_dhcp_lease')]
 
     def get(self, request):
-        host = _resolve_router_ip('dhcp', settings.MIKROTIK_DHCP_ROUTER_IP)
+        host = _resolve_router_ip('dhcp', settings.MIKROTIK_DHCP_ROUTER_IP, request.query_params.get('router'))
         try:
             connection, api = get_routeros_connection(host)
         except MikrotikConnectionError as exc:
@@ -74,7 +81,7 @@ class PortalFwFilterListView(APIView):
     permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_fwfilter')]
 
     def get(self, request):
-        host = _resolve_router_ip('fwfilter', settings.MIKROTIK_FWFILTER_ROUTER_IP)
+        host = _resolve_router_ip('fwfilter', settings.MIKROTIK_FWFILTER_ROUTER_IP, request.query_params.get('router'))
         try:
             connection, api = get_routeros_connection(host)
         except MikrotikConnectionError as exc:
