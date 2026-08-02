@@ -719,4 +719,6 @@ class FeaturePermission(models.Model):
             ('can_view_ad_locked_users', 'Bisa melihat & Unlock Locked Users (Active Directory)'),
             ('can_view_ad_dns', 'Bisa melihat DNS (Active Directory)'),
             ('can_view_ad_groups', 'Bisa melihat Groups (Active Directory)'),
+            ('can_view_zentyal_users', 'Bisa melihat & Kelola Users (Mail Server / Zentyal)'),
+            ('can_view_zentyal_groups', 'Bisa melihat Groups (Mail Server / Zentyal)'),
         ]

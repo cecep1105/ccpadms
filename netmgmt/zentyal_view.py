@@ -35,7 +35,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from api.permissions import IsStaffRole
+from api.permissions import HasFeaturePermission, IsStaffRole
 from netmgmt.crypto_utils import NetmgmtCryptoError, decrypt_zentyal_password
 from netmgmt.ldap_utils import LDAPManagementClient, LDAPManagementError
 from netmgmt.list_utils import paginate_sort_filter, parse_list_params
@@ -120,7 +120,7 @@ def _group_to_dict(entry: dict) -> dict:
 
 class ZentyalUserListView(APIView):
     """GET /api/v1/netmgmt/zentyal/users/?_page=&_limit=&_sort_by=&_order=&_q=&_search_fields= -- daftar user Zentyal."""
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_zentyal_users')]
 
     def get(self, request):
         try:
@@ -141,7 +141,7 @@ class ZentyalUserListView(APIView):
 
 class ZentyalGroupListView(APIView):
     """GET /api/v1/netmgmt/zentyal/groups/?_page=&_limit=&_sort_by=&_order=&_q=&_search_fields= -- daftar group (posixGroup + zentyalDistributionGroup digabung)."""
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_zentyal_groups')]
 
     def get(self, request):
         try:
@@ -162,7 +162,7 @@ class ZentyalGroupListView(APIView):
 
 class ZentyalGroupMembersView(APIView):
     """GET /api/v1/netmgmt/zentyal/groups/<path:group_dn>/members/ -- daftar user di dalam 1 group."""
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_zentyal_groups')]
 
     def get(self, request, group_dn=None):
         try:
@@ -253,7 +253,7 @@ class ZentyalResetPasswordView(APIView):
     tapi TETAP disarankan pakai koneksi terenkripsi demi keamanan kalau
     servernya mendukung (lihat rencana migrasi LDAP Anda).
     """
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_zentyal_users')]
 
     def post(self, request):
         user_dn = request.data.get('user_dn')
@@ -410,7 +410,7 @@ class ZentyalUserToggleStatusView(APIView):
     `userPassword` bikin autentikasi GAGAL tanpa mengubah hash asli
     (REVERSIBLE, lihat _user_to_dict() utk detail lengkap).
     """
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_zentyal_users')]
 
     def post(self, request):
         user_dn = request.data.get('user_dn')
