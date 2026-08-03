@@ -1,6 +1,11 @@
 """
-API aplikasi ID Card -- staff-only utk SEKARANG (portal + izin granular
-menyusul belakangan, sesuai rencana). Business logic (generate kartu,
+API aplikasi ID Card -- Generate/lihat/ubah-status kartu (SEMUA jenis)
+& daftar/tambah data Visitor-BHL TERSEDIA utk portal (izin granular
+can_view_idcard, staf tetap selalu lolos apa pun izinnya) -- TAPI
+kelola TEMPLATE (bikin/edit background) & ubah/hapus data Visitor/BHL
+TETAP staff-only (keputusan cakupan: portal generate & pakai data yg
+SUDAH ada, TIDAK atur konfigurasi/hapus data punya orang lain -- lihat
+IdCardPortalWritePermission di bawah). Business logic (generate kartu,
 cari foto, ubah status) dijaga TIPIS di sini, dilempar ke
 idcard/services.py, photo_utils.py, card_generator.py.
 """
@@ -12,11 +17,11 @@ from django.core.files.base import ContentFile
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from api.permissions import IsStaffRole
+from api.permissions import HasFeaturePermission, IsStaffRole
 from iclock.models import employee
 
 from . import card_generator, photo_utils, services
@@ -42,9 +47,33 @@ def _decode_data_uri(data_uri):
         raise ValueError(f'Gagal decode data foto: {exc}') from exc
 
 
+class IdCardPortalWritePermission(BasePermission):
+    """
+    Staff/superuser SELALU lolos APA PUN method-nya. User portal
+    berizin can_view_idcard CUMA lolos utk GET -- dipakai
+    IDCardTemplateListView (portal BOLEH lihat daftar template buat
+    dropdown generate, TIDAK BOLEH bikin template baru) &
+    IDCardHolderDetailView (portal BOLEH lihat detail 1 holder, TIDAK
+    BOLEH ubah/hapus data punya orang lain sembarangan -- beda dari
+    IDCardHolderListView yg POST-nya SENGAJA diizinkan portal, krn
+    nambah data holder BARU memang bagian dari alur kerja mereka
+    sehari-hari).
+    """
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not (user and user.is_authenticated):
+            return False
+        if user.is_staff or user.is_superuser:
+            return True
+        if not user.has_perm('iclock.can_view_idcard'):
+            return False
+        return request.method == 'GET'
+
+
 class IDCardTemplateListView(APIView):
-    """GET (list, filter ?card_type=) / POST (tambah) -- template background."""
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    """GET (list, filter ?card_type=) -- TERSEDIA portal (lihat IdCardPortalWritePermission). POST (tambah) -- STAFF-ONLY."""
+    permission_classes = [IsAuthenticated, IdCardPortalWritePermission]
 
     def get(self, request):
         qs = IDCardTemplate.objects.all()
@@ -61,7 +90,7 @@ class IDCardTemplateListView(APIView):
 
 
 class IDCardTemplateDetailView(APIView):
-    """PATCH (ubah, mis. toggle is_active) / DELETE."""
+    """PATCH (ubah, mis. toggle is_active) / DELETE -- STAFF-ONLY (kelola template TIDAK termasuk cakupan portal, beda dari IDCardTemplateListView.get() yg boleh dibaca portal)."""
     permission_classes = [IsAuthenticated, IsStaffRole]
 
     def patch(self, request, pk=None):
@@ -83,8 +112,12 @@ class IDCardTemplateDetailView(APIView):
 
 
 class IDCardHolderListView(APIView):
-    """GET (list, filter ?card_type=visitor|bhl&_q=) / POST (tambah) -- data manual Visitor/BHL."""
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    """
+    GET (list, filter ?card_type=visitor|bhl&_q=) / POST (tambah) -- data manual Visitor/BHL.
+    TERSEDIA portal (can_view_idcard) utk KEDUA method -- nambah data
+    holder baru MEMANG bagian alur kerja portal sehari-hari.
+    """
+    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_idcard')]
 
     def get(self, request):
         qs = IDCardHolder.objects.all()
@@ -113,8 +146,8 @@ class IDCardHolderListView(APIView):
 
 
 class IDCardHolderDetailView(APIView):
-    """GET (detail) / PATCH (ubah) / DELETE."""
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    """GET (detail, TERSEDIA portal) / PATCH (ubah) / DELETE -- 2 terakhir STAFF-ONLY."""
+    permission_classes = [IsAuthenticated, IdCardPortalWritePermission]
 
     def get(self, request, pk=None):
         holder = get_object_or_404(IDCardHolder, pk=pk)
@@ -142,7 +175,7 @@ class IDCardPhotoSearchView(APIView):
     HANYA relevan utk 'karyawan'/'driver' (Visitor/BHL TIDAK ada sumber
     ini, foto mereka SELALU shoot/upload manual).
     """
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_idcard')]
 
     def get(self, request):
         pin = (request.query_params.get('pin') or '').strip()
@@ -174,7 +207,7 @@ class IDCardGenerateView(APIView):
     Generate 1 IDCard baru: susun gambar (card_generator.py), simpan
     foto sumber + hasil composite, status awal SELALU 'belum_cetak'.
     """
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_idcard')]
 
     def post(self, request):
         card_type = request.data.get('card_type')
@@ -251,7 +284,7 @@ class IDCardGenerateView(APIView):
 
 class IDCardListView(APIView):
     """GET -- daftar kartu, filter ?card_type=&status=&_q= (cari nama/PIN/no. identitas)."""
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_idcard')]
 
     def get(self, request):
         qs = IDCard.objects.select_related('employee', 'holder', 'template').all()
@@ -281,7 +314,7 @@ class IDCardListView(APIView):
 
 class IDCardDetailView(APIView):
     """GET -- 1 kartu LENGKAP termasuk riwayat log."""
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_idcard')]
 
     def get(self, request, pk=None):
         card = get_object_or_404(IDCard.objects.select_related('employee', 'holder', 'template').prefetch_related('logs__changed_by'), pk=pk)
@@ -290,7 +323,7 @@ class IDCardDetailView(APIView):
 
 class IDCardStatusChangeView(APIView):
     """POST -- ubah status kartu (belum_cetak/sudah_cetak/hilang/cetak_ulang), SELALU lewat services.change_card_status (log + status sinkron)."""
-    permission_classes = [IsAuthenticated, IsStaffRole]
+    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_idcard')]
 
     def post(self, request, pk=None):
         new_status = request.data.get('status')

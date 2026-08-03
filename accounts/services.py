@@ -342,6 +342,7 @@ FEATURE_PERMISSIONS = [
     ('iclock.can_view_zentyal_groups', 'can_view_zentyal_groups', 'Mail Server - Groups (Lihat)'),
     ('iclock.can_view_cloudflare', 'can_view_cloudflare', 'Cloudflare - DNS Record (Lihat, Tambah, Edit -- Tanpa Hapus)'),
     ('iclock.can_view_itinfra', 'can_view_itinfra', 'Data IT-Infra (Lihat, kecuali entry Staff Only)'),
+    ('iclock.can_view_idcard', 'can_view_idcard', 'ID Card (Generate & Kelola, semua jenis kartu)'),
 ]
 
 

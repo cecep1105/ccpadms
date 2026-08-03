@@ -723,4 +723,5 @@ class FeaturePermission(models.Model):
             ('can_view_zentyal_groups', 'Bisa melihat Groups (Mail Server / Zentyal)'),
             ('can_view_cloudflare', 'Bisa melihat & Kelola DNS Record - Tanpa Hapus (Cloudflare)'),
             ('can_view_itinfra', 'Bisa melihat Data IT-Infra (kecuali entry Staff Only)'),
+            ('can_view_idcard', 'Bisa Generate & Kelola ID Card (semua jenis kartu)'),
         ]
