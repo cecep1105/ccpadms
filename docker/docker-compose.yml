@@ -118,6 +118,10 @@ services:
         MIRROR_REQUEST: ${MIRROR_REQUEST:-False}
         MIRROR_REQUEST_URL: ${MIRROR_REQUEST_URL:-}
         SEND_ORIGINIP: ${SEND_ORIGINIP:-False}
+        IDCARD_FTP1: ${IDCARD_FTP1:-}
+        IDCARD_FTP2: ${IDCARD_FTP2:-}
+        IDCARD_FTP3: ${IDCARD_FTP3:-} 
+        IDCARD_KBA_CONNECTION_STRING: ${IDCARD_KBA_CONNECTION_STRING:-}
 
       RUN_MIGRATIONS: "true"  # HANYA service ini yang migrate/collectstatic, lihat entrypoint.sh
     extra_hosts:
