@@ -80,10 +80,10 @@ class IDCardTemplateListView(APIView):
         card_type = request.query_params.get('card_type')
         if card_type:
             qs = qs.filter(card_type=card_type)
-        return Response(IDCardTemplateSerializer(qs, many=True).data)
+        return Response(IDCardTemplateSerializer(qs, many=True, context={'request': request}).data)
 
     def post(self, request):
-        serializer = IDCardTemplateSerializer(data=request.data)
+        serializer = IDCardTemplateSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -95,7 +95,7 @@ class IDCardTemplateDetailView(APIView):
 
     def patch(self, request, pk=None):
         template = get_object_or_404(IDCardTemplate, pk=pk)
-        serializer = IDCardTemplateSerializer(template, data=request.data, partial=True)
+        serializer = IDCardTemplateSerializer(template, data=request.data, partial=True, context={'request': request})
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
@@ -135,11 +135,11 @@ class IDCardHolderListView(APIView):
         page_obj = paginator.get_page(page)
         return Response({
             'count': paginator.count, 'page': page_obj.number,
-            'results': IDCardHolderSerializer(page_obj.object_list, many=True).data,
+            'results': IDCardHolderSerializer(page_obj.object_list, many=True, context={'request': request}).data,
         })
 
     def post(self, request):
-        serializer = IDCardHolderSerializer(data=request.data)
+        serializer = IDCardHolderSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         serializer.save(created_by=request.user)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -151,11 +151,11 @@ class IDCardHolderDetailView(APIView):
 
     def get(self, request, pk=None):
         holder = get_object_or_404(IDCardHolder, pk=pk)
-        return Response(IDCardHolderSerializer(holder).data)
+        return Response(IDCardHolderSerializer(holder, context={'request': request}).data)
 
     def patch(self, request, pk=None):
         holder = get_object_or_404(IDCardHolder, pk=pk)
-        serializer = IDCardHolderSerializer(holder, data=request.data, partial=True)
+        serializer = IDCardHolderSerializer(holder, data=request.data, partial=True, context={'request': request})
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
@@ -279,7 +279,7 @@ class IDCardGenerateView(APIView):
         services.change_card_status(request.user, card.id, 'belum_cetak', notes='Kartu baru digenerate.')
         card.refresh_from_db()
 
-        return Response(IDCardDetailSerializer(card).data, status=status.HTTP_201_CREATED)
+        return Response(IDCardDetailSerializer(card, context={'request': request}).data, status=status.HTTP_201_CREATED)
 
 
 class IDCardListView(APIView):
@@ -308,7 +308,7 @@ class IDCardListView(APIView):
         page_obj = paginator.get_page(page)
         return Response({
             'count': paginator.count, 'page': page_obj.number,
-            'results': IDCardListSerializer(page_obj.object_list, many=True).data,
+            'results': IDCardListSerializer(page_obj.object_list, many=True, context={'request': request}).data,
         })
 
 
@@ -318,7 +318,7 @@ class IDCardDetailView(APIView):
 
     def get(self, request, pk=None):
         card = get_object_or_404(IDCard.objects.select_related('employee', 'holder', 'template').prefetch_related('logs__changed_by'), pk=pk)
-        return Response(IDCardDetailSerializer(card).data)
+        return Response(IDCardDetailSerializer(card, context={'request': request}).data)
 
 
 class IDCardStatusChangeView(APIView):
@@ -331,4 +331,4 @@ class IDCardStatusChangeView(APIView):
             return Response({'error': "'status' tidak valid."}, status=status.HTTP_400_BAD_REQUEST)
         notes = request.data.get('notes', '')
         card = services.change_card_status(request.user, pk, new_status, notes=notes)
-        return Response(IDCardDetailSerializer(card).data)
+        return Response(IDCardDetailSerializer(card, context={'request': request}).data)
