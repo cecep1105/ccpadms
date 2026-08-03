@@ -290,6 +290,22 @@ USE_I18N = True
 USE_TZ = env.bool('USE_TZ', default=False)
 
 STATIC_URL = 'static/'
+
+# ---------------------------------------------------------------------------
+# MEDIA -- file yang DIUNGGAH lewat aplikasi ini (BEDA dari STATIC yang
+# dikumpulkan dari kode, mis. CSS/JS) -- konsumen PERTAMA: aplikasi ID
+# Card (idcard/), background template & foto kartu (idcard/models.py::
+# IDCardTemplate/IDCard/IDCardHolder). Belum pernah ada fitur upload
+# file lokal sebelum ini di proyek ini.
+#
+# Development: Django sendiri yang serve file ini (lihat config/urls.py,
+# `+ static(...)`, CUMA aktif saat DEBUG=True). Produksi: WAJIB di-serve
+# oleh web server (nginx/dst) langsung dari MEDIA_ROOT, Django TIDAK
+# efisien utk serve file besar/banyak trafik -- konfigurasi nginx utk
+# alias /media/ -> MEDIA_ROOT ada di LUAR cakupan kode ini.
+# ---------------------------------------------------------------------------
+MEDIA_URL = 'media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
