@@ -66,6 +66,12 @@ requests>=2.31
 # lihat iclock/xlsx_export.py.
 openpyxl>=3.1
 
+# Untuk aplikasi ID Card (idcard/) -- ambil foto dari FTP eksternal
+# (django-storages, backend FTP) & database SQL Server pihak ketiga
+# (pyodbc, khusus sumber foto driver KBA) -- lihat idcard/photo_utils.py.
+django-storages>=1.14
+pyodbc>=5.0
+
 # Untuk detail per-VM VMware vCenter (SOAP API, PropertyCollector -- lihat
 # netmgmt/vmware_view.py). List Host/VM Guest TETAP di Next.js (REST API,
 # src/lib/vsphere-client.ts) -- pyvmomi CUMA dipakai utk halaman detail.
