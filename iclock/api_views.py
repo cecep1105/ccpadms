@@ -572,11 +572,13 @@ class EmployeeSearchAPIView(APIView):
     GET /api/v1/iclock/employee-search/?q= -- autocomplete PIN/nama, dipakai
     Attendance Recap (staff) DAN halaman Transfer Finger non-staff (perlu
     'id' -- BUKAN cuma PIN -- krn endpoint transfer-finger dipanggil pakai
-    PK numerik, bukan PIN).
+    PK numerik, bukan PIN) DAN halaman Generate ID Card (staff & portal,
+    cari employee by PIN utk karyawan/driver).
     """
     permission_classes = [IsAuthenticated, HasFeaturePermission(
         'iclock.can_transfer_finger', 'iclock.can_view_attendance_recap',
         'iclock.can_view_attendance_recap_kantin', 'iclock.can_view_attendance_recap_driver',
+        'iclock.can_view_idcard',
     )]
 
     def get(self, request):
