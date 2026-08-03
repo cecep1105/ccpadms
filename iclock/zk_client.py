@@ -350,6 +350,7 @@ def transfer_fingerprints(source_ip: str, target_ips: list, pins: list,
             for pin, (src_user, fingers) in transfer_data.items():
                 try:
                     if pin not in target_users_by_pin:
+                        pin = pin.strip('0') # hilangkan kode prefix 0 di PIN biar konsisten dengan cara pyzk nge-pack user_id ke device    
                         tgt_conn.set_user(
                             name=src_user.name, privilege=src_user.privilege,
                             password=src_user.password, group_id=src_user.group_id,
@@ -813,6 +814,7 @@ def transfer_fingerprints_from_db(pin: str, name: str, privilege: int, password:
 
             if pin not in target_users_by_pin:
                 try:
+                    pin = pin.strip('0') # hilangkan kode prefix 0 di PIN biar konsisten dengan cara pyzk nge-pack user_id ke device    
                     tgt_conn.set_user(
                         name=name, privilege=privilege, password=password,
                         group_id=group_id, user_id=pin, card=card,

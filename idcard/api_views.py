@@ -313,12 +313,35 @@ class IDCardListView(APIView):
 
 
 class IDCardDetailView(APIView):
-    """GET -- 1 kartu LENGKAP termasuk riwayat log."""
-    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_idcard')]
+    """
+    GET -- 1 kartu LENGKAP termasuk riwayat log (TERSEDIA portal).
+    DELETE -- hapus kartu PERMANEN (STAFF-ONLY, lihat IdCardPortalWritePermission
+    -- SAMA pola dgn IDCardHolderDetailView: portal boleh lihat, TIDAK
+    boleh hapus data). Menghapus row DB SEKALIGUS file fisik (`photo` &
+    `card_image`) dari storage -- Django TIDAK otomatis membersihkan
+    file saat model instance dihapus (gotcha yg cukup terkenal), jadi
+    file HARUS dihapus EKSPLISIT lewat FieldFile.delete(save=False)
+    SEBELUM baris DB-nya dihapus, KALAU TIDAK file yatim akan
+    menumpuk terus di server (media/idcard/...) meski row-nya sudah
+    tidak ada lagi.
+    """
+    permission_classes = [IsAuthenticated, IdCardPortalWritePermission]
 
     def get(self, request, pk=None):
         card = get_object_or_404(IDCard.objects.select_related('employee', 'holder', 'template').prefetch_related('logs__changed_by'), pk=pk)
         return Response(IDCardDetailSerializer(card, context={'request': request}).data)
+
+    def delete(self, request, pk=None):
+        card = get_object_or_404(IDCard, pk=pk)
+        # save=False -- JANGAN sampai FieldFile.delete() ikut trigger
+        # card.save() (yg butuh full_clean() gara2 model.clean() custom
+        # kita), row-nya TOH akan dihapus SEKALIAN sesudah ini.
+        if card.photo:
+            card.photo.delete(save=False)
+        if card.card_image:
+            card.card_image.delete(save=False)
+        card.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class IDCardStatusChangeView(APIView):
