@@ -178,7 +178,7 @@ class IDCardPhotoSearchView(APIView):
     permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_idcard')]
 
     def get(self, request):
-        pin = (request.query_params.get('pin') or '').strip()
+        pin = (request.query_params.get('pin') or '').lstrip('0')
         card_type = request.query_params.get('card_type', 'karyawan')
         if not pin:
             return Response({'error': "Parameter 'pin' wajib diisi."}, status=status.HTTP_400_BAD_REQUEST)
