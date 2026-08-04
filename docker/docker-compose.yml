@@ -231,6 +231,7 @@ services:
         NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-}
     restart: unless-stopped
     environment:
+      NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-}
       NEXTAUTH_SECRET: "${NEXTAUTH_SECRET:?wajib diisi di .env, generate pakai: openssl rand -base64 32}"
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost}
       # BEDA dari NEXT_PUBLIC_API_BASE_URL (itu utk BROWSER) -- ini KHUSUS
