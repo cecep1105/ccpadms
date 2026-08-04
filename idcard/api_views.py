@@ -247,7 +247,7 @@ class IDCardGenerateView(APIView):
                 return Response({'error': "'holder_id' wajib diisi utk kartu jenis ini."}, status=status.HTTP_400_BAD_REQUEST)
             holder = get_object_or_404(IDCardHolder, pk=holder_id)
             name = holder.full_name
-            identifier = holder.id_number
+            identifier = holder.id_number.lstrip('0')
 
         extra_text = request.data.get('extra_text', '')
 

@@ -533,6 +533,10 @@ MIKROTIK_FWFILTER_ROUTER_IP = env('MIKROTIK_FWFILTER_ROUTER_IP', default='10.100
 IDCARD_FTP1 = env('IDCARD_FTP1', default='')
 IDCARD_FTP2 = env('IDCARD_FTP2', default='')
 IDCARD_FTP3 = env('IDCARD_FTP3', default='')
+
+# (left, top, right, bottom) -- kotak foto untuk idcard
+IDCARD_PHOTO_BOX = env.tuple("IDCARD_PHOTO_BOX", cast=int, default=(289, 400, 589, 700))
+
 # Connection string ODBC (pyodbc) ke SQL Server pihak ketiga -- KHUSUS
 # sumber foto driver KBA, lihat idcard/photo_utils.py::_get_kba_driver_photo().
 IDCARD_KBA_CONNECTION_STRING = env('IDCARD_KBA_CONNECTION_STRING', default='')
