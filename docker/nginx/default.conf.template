@@ -96,7 +96,7 @@ server {
 
     # Intercept media requests and serve directly from the volume
     location /media/ {
-        alias /media/;  
+        alias /app/media/;  
         expires 30d;
         access_log off;
     }

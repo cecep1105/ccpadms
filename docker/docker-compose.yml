@@ -276,7 +276,7 @@ services:
       - ./nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro      
       - ./nginx/certs:/etc/nginx/certs:ro
       - django_static:/app/staticfiles:ro
-      - media_data:/media:ro
+      - media_data:/app/media:ro
     depends_on:
       django-web:
         condition: service_healthy
