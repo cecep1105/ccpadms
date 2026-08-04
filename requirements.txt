@@ -38,7 +38,10 @@ dlib>=19.24
 # terlanjur ter-install numpy 2.x, jalankan:
 #   pip install "numpy<2"
 numpy>=1.26,<2.0
+
+# Untuk generate ID Card (idcard/) -- lihat idcard/card_generator.py
 Pillow>=10.0
+python-barcode>=0.16.1
 
 # Celery -- lempar proses CPU-intensive (face recognition) ke worker
 # terpisah, lihat config/celery.py & mattendance/tasks.py. Reuse Redis yang
@@ -77,4 +80,5 @@ pyodbc>=5.0
 # src/lib/vsphere-client.ts) -- pyvmomi CUMA dipakai utk halaman detail.
 pyvmomi>=8.0
 
+# Untuk mirror request push-sdk ke server push-sdk lain
 httpx>=0.28.1
