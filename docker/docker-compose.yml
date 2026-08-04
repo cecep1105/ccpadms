@@ -122,6 +122,7 @@ services:
         IDCARD_FTP2: ${IDCARD_FTP2:-}
         IDCARD_FTP3: ${IDCARD_FTP3:-} 
         IDCARD_KBA_CONNECTION_STRING: ${IDCARD_KBA_CONNECTION_STRING:-}
+        IDCARD_PHOTO_BOX: ${IDCARD_PHOTO_BOX:-289,400,589,700}
 
       RUN_MIGRATIONS: "true"  # HANYA service ini yang migrate/collectstatic, lihat entrypoint.sh
     extra_hosts:
@@ -292,4 +293,3 @@ volumes:
   django_media:
   mysql_data:
   pushsdk_data: 
-  
