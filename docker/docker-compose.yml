@@ -134,6 +134,8 @@ services:
       - ..:/app
       - ./django_static:/app/staticfiles
       - ./django_media:/app/media
+      - ./pushsdk_data:/app/data
+      - ./mysql_data:/var/lib/mysql
     depends_on:
       mysql:
         condition: service_healthy
@@ -288,3 +290,6 @@ volumes:
   redis_data:
   django_static:
   django_media:
+  mysql_data:
+  pushsdk_data: 
+  
