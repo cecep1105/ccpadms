@@ -98,7 +98,7 @@ server {
     location /media/ {
         alias /media/;  
         expires 30d;
-        access_log off
+        access_log off;
     }
 
     # --- WebSocket (Channels, console real-time Active Device) ---
