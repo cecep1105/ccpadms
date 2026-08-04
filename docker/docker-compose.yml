@@ -133,7 +133,7 @@ services:
     volumes:
       - ..:/app
       - django_static:/app/staticfiles
-      - django_media:/app/media
+      - ./django_media:/app/media
     depends_on:
       mysql:
         condition: service_healthy
@@ -276,7 +276,7 @@ services:
       - ./nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro      
       - ./nginx/certs:/etc/nginx/certs:ro
       - django_static:/app/staticfiles:ro
-      - django_media:/app/media:ro
+      - ./django_media:/app/media:ro
     depends_on:
       django-web:
         condition: service_healthy
