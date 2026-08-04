@@ -96,6 +96,7 @@ def activate_device_to_iclock(registered_device: RegisteredDevice) -> bool:
     iclock.objects.create(
         SN=registered_device.SN,
         Alias=registered_device.DeviceName or registered_device.SN,
+        DeviceName=registered_device.DeviceName or registered_device.SN,
         DeptID=registered_device.DeptID,
         IPAddress=registered_device.IPAddress,
         MAC=registered_device.MAC,
