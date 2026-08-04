@@ -291,5 +291,4 @@ volumes:
   redis_data:
   django_static:
   django_media:
-  mysql_data:
   pushsdk_data: 
