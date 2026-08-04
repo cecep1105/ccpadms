@@ -132,7 +132,7 @@ services:
       - misdm.com      
     volumes:
       - ..:/app
-      - django_static:/app/staticfiles
+      - ./django_static:/app/staticfiles
       - ./django_media:/app/media
     depends_on:
       mysql:
@@ -275,7 +275,7 @@ services:
       # - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro      
       - ./nginx/certs:/etc/nginx/certs:ro
-      - django_static:/app/staticfiles:ro
+      - ./django_static:/app/staticfiles:ro
       - ./django_media:/app/media:ro
     depends_on:
       django-web:
