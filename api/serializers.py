@@ -22,6 +22,7 @@ class UserSerializer(serializers.ModelSerializer):
     can_view_cloudflare = serializers.SerializerMethodField()
     can_view_itinfra = serializers.SerializerMethodField()
     can_view_idcard = serializers.SerializerMethodField()
+    can_view_active_device = serializers.SerializerMethodField()
     has_employee_link = serializers.SerializerMethodField()
     emp_pin = serializers.SerializerMethodField()
     emp_name = serializers.SerializerMethodField()
@@ -46,7 +47,7 @@ class UserSerializer(serializers.ModelSerializer):
             'can_view_dhcp_lease', 'can_view_fwfilter', 'can_view_netwatch',
             'can_view_ad_users', 'can_view_ad_locked_users', 'can_view_ad_dns', 'can_view_ad_groups',
             'can_view_zentyal_users', 'can_view_zentyal_groups',
-            'can_view_cloudflare', 'can_view_itinfra', 'can_view_idcard', 'has_employee_link', 'emp_pin', 'emp_name',
+            'can_view_cloudflare', 'can_view_itinfra', 'can_view_idcard', 'can_view_active_device', 'has_employee_link', 'emp_pin', 'emp_name',
         ]
         read_only_fields = [
             'id', 'username', 'auth_source', 'is_superuser', 'created_at', 'updated_at',
@@ -55,7 +56,7 @@ class UserSerializer(serializers.ModelSerializer):
             'can_view_dhcp_lease', 'can_view_fwfilter', 'can_view_netwatch',
             'can_view_ad_users', 'can_view_ad_locked_users', 'can_view_ad_dns', 'can_view_ad_groups',
             'can_view_zentyal_users', 'can_view_zentyal_groups',
-            'can_view_cloudflare', 'can_view_itinfra', 'can_view_idcard', 'has_employee_link', 'emp_pin', 'emp_name',
+            'can_view_cloudflare', 'can_view_itinfra', 'can_view_idcard', 'can_view_active_device', 'has_employee_link', 'emp_pin', 'emp_name',
         ]
 
     def get_can_transfer_finger(self, obj):
@@ -105,6 +106,9 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_can_view_idcard(self, obj):
         return bool(obj.is_staff or obj.is_superuser or obj.has_perm('iclock.can_view_idcard'))
+
+    def get_can_view_active_device(self, obj):
+        return bool(obj.is_staff or obj.is_superuser or obj.has_perm('iclock.can_view_active_device'))
 
     def get_has_employee_link(self, obj):
         """

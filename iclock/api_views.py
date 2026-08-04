@@ -97,6 +97,21 @@ class ActiveDeviceViewSet(BaseIclockViewSet):
     serializer_class = ActiveDeviceSerializer
     search_fields = ['SN', 'Alias','DeviceName']  # Alias & DeviceName sama-sama dicari utk ?q=, walau di DB beda kolom
 
+    # 5 aksi PALING AMAN (lihat SEMUA -- BUKAN aksi tulis yg TERUS
+    # ubah/hapus data device fisik) -- TERSEDIA portal (izin granular
+    # can_view_active_device). SISANYA (reboot, network_params,
+    # generic_param -- KHUSUSNYA generic_param yg pd dasarnya backdoor
+    # KE PARAMETER APAPUN di device, live_users, backup_fingerprints,
+    # user_toggle_privilege, user_delete) TETAP staff-only -- semua itu
+    # aksi yg BISA merusak/mengubah konfigurasi device fisik kalau
+    # dipakai sembarangan, DI LUAR cakupan yg disepakati portal.
+    _PORTAL_SAFE_ACTIONS = {'list', 'retrieve', 'sync_time', 'live_logs', 'user_transfer_finger'}
+
+    def get_permissions(self):
+        if self.action in self._PORTAL_SAFE_ACTIONS:
+            return [IsAuthenticated(), HasFeaturePermission('iclock.can_view_active_device')()]
+        return [permission() for permission in self.permission_classes]
+
     # -----------------------------------------------------------------
     # Aksi device (pyzk, koneksi LANGSUNG ke device fisik) -- reuse fungsi
     # yang SAMA dgn dashboard web (iclock/zk_client.py), sudah dikonfirmasi

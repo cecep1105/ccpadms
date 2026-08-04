@@ -724,4 +724,5 @@ class FeaturePermission(models.Model):
             ('can_view_cloudflare', 'Bisa melihat & Kelola DNS Record - Tanpa Hapus (Cloudflare)'),
             ('can_view_itinfra', 'Bisa melihat Data IT-Infra (kecuali entry Staff Only)'),
             ('can_view_idcard', 'Bisa Generate & Kelola ID Card (semua jenis kartu)'),
+            ('can_view_active_device', 'Bisa melihat Active Device, Sync Jam, Live Log, & Transfer Finger dari Device'),
         ]

@@ -343,6 +343,7 @@ FEATURE_PERMISSIONS = [
     ('iclock.can_view_cloudflare', 'can_view_cloudflare', 'Cloudflare - DNS Record (Lihat, Tambah, Edit -- Tanpa Hapus)'),
     ('iclock.can_view_itinfra', 'can_view_itinfra', 'Data IT-Infra (Lihat, kecuali entry Staff Only)'),
     ('iclock.can_view_idcard', 'can_view_idcard', 'ID Card (Generate & Kelola, semua jenis kartu)'),
+    ('iclock.can_view_active_device', 'can_view_active_device', 'Active Device (Lihat, Sync Jam, Live Log, Transfer Finger dari Device)'),
 ]
 
 
