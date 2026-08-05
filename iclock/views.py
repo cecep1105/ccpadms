@@ -531,7 +531,6 @@ def registered_device_list(request):
     sort_key = request.GET.get('sort', 'sn')
     direction = request.GET.get('dir', 'asc') if request.GET.get('dir') in ('asc', 'desc') else 'asc'
     page_size = _resolve_page_size(request)
-
     qs = RegisteredDevice.objects.select_related('DeptID').all()
     if search:
         qs = qs.filter(SN__icontains=search) | qs.filter(DeviceName__icontains=search)
@@ -553,6 +552,8 @@ def registered_device_list(request):
         'page_size': page_size,
         'page_size_options': PAGE_SIZE_OPTIONS,
     })
+
+
 
 
 @staff_required
