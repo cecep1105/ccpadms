@@ -91,6 +91,18 @@ class DepartmentViewSet(BaseIclockViewSet):
     serializer_class = DepartmentSerializer
     search_fields = ['DeptName']
 
+    # GET (list/retrieve) TERSEDIA portal (can_view_active_device) --
+    # dibutuhkan halaman portal Active Device utk isi dropdown "Pool
+    # Tujuan" di dialog Transfer Finger (lihat portal/active-device/
+    # _components/portal-device-actions-menu.tsx -- DeviceTransferFingerDialog
+    # dipakai ULANG dari staff, & dialog itu perlu daftar department).
+    # SEKADAR lihat NAMA department, bukan data sensitif -- aman
+    # dibuka lebih luas drpd endpoint Active Device sendiri.
+    def get_permissions(self):
+        if self.action in ('list', 'retrieve'):
+            return [IsAuthenticated(), HasFeaturePermission('iclock.can_view_active_device')()]
+        return [permission() for permission in self.permission_classes]
+
 
 class ActiveDeviceViewSet(BaseIclockViewSet):
     queryset = iclock.objects.select_related('DeptID').all().order_by('Alias')
