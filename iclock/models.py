@@ -541,6 +541,12 @@ class transaction(models.Model):
     Reserved = models.CharField(_('Reserved'), max_length=20, null=True, blank=True)
 
     Function = models.CharField(_('Function'), max_length=20, null=True, blank=True, editable=True)
+    TTime_Minute = models.DateTimeField(null=True, editable=False)
+
+    def save(self, *args, **kwargs):
+        dt = self.TTime
+        self.TTime_Minute = dt.replace(second=0, microsecond=0)
+        super().save(*args, **kwargs)
 
     def FncName(self):
         """Label yang bisa dibaca dari kode Function (mis. '89' -> 'KARYAWAN'), sesuai settings.DEVICEFUNCTION."""
@@ -552,9 +558,15 @@ class transaction(models.Model):
     class Meta:
         db_table = 'checkinout'
         managed = True
-        unique_together = (('UserID', 'TTime'),)
+        # unique_together = (('UserID', 'TTime'),)
         verbose_name = _('Transaction')
         verbose_name_plural = _('Transactions')
+        constraints = [
+            models.UniqueConstraint(
+                fields=["UserID", "State", "TTime_Minute"],
+                name="unique_user_state_minute",
+            )
+        ]
 
     def __str__(self):
         return f'{self.UserID}, {self.TTime}'

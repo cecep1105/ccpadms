@@ -85,6 +85,13 @@ class ITInfraEntry(models.Model):
         verbose_name_plural = _('Data IT-Infra')
         ordering = ['category__name', 'name']
 
+        constraints = [
+            models.UniqueConstraint(
+                fields=["name", "category"],
+                name="unique_name_category",
+            )
+        ]
+
     def __str__(self):
         return f'{self.category.name} - {self.name}'
 
