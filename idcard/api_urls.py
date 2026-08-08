@@ -6,6 +6,8 @@ from .api_views import (
     IDCardHolderDetailView,
     IDCardHolderListView,
     IDCardListView,
+    IDCardPhotoBoxConfigView,
+    IDCardPhotoRetouchSaveView,
     IDCardPhotoSearchView,
     IDCardStatusChangeView,
     IDCardTemplateDetailView,
@@ -22,6 +24,8 @@ urlpatterns = [
     path('holders/<int:pk>/', IDCardHolderDetailView.as_view(), name='holder-detail'),
 
     path('photo-search/', IDCardPhotoSearchView.as_view(), name='photo-search'),
+    path('photo-box-config/', IDCardPhotoBoxConfigView.as_view(), name='photo-box-config'),
+    path('photo-retouch-save/', IDCardPhotoRetouchSaveView.as_view(), name='photo-retouch-save'),
 
     path('cards/', IDCardListView.as_view(), name='card-list'),
     path('cards/generate/', IDCardGenerateView.as_view(), name='card-generate'),

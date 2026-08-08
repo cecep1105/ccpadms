@@ -192,6 +192,71 @@ class IDCardPhotoSearchView(APIView):
         return Response({'results': results})
 
 
+class IDCardPhotoBoxConfigView(APIView):
+    """
+    GET /api/v1/idcard/photo-box-config/
+
+    Expose rasio (width/height) kotak foto di layout kartu
+    (card_generator.py::CARD_LAYOUT['photo_box'], dari
+    settings.IDCARD_PHOTO_BOX) -- DIPAKAI fitur retouch foto (frontend,
+    Canvas) supaya area crop yang ditampilkan ke staf PERSIS SAMA
+    rasionya dgn kotak foto SUNGGUHAN di kartu jadi nanti.
+
+    KENAPA endpoint terpisah (bukan di-hardcode rasio-nya di frontend):
+    IDCARD_PHOTO_BOX diisi lewat env var per-deployment (nilai default
+    di settings.py KEBETULAN persegi 1:1, TAPI komentar di
+    card_generator.py menyebut rasio SUNGGUHAN yang dipakai ~3:4.75) --
+    kalau di-hardcode di frontend & suatu saat admin ubah
+    IDCARD_PHOTO_BOX di .env, area crop yg staf lihat BISA BEDA dgn
+    hasil crop SUNGGUHAN oleh _fit_photo_into_box() (yg pakai
+    settings.IDCARD_PHOTO_BOX langsung), foto jadi ke-crop ULANG scr
+    tidak terduga stlh staf SUSAH PAYAH atur posisi -- endpoint ini
+    JAMIN frontend SELALU ikut nilai server yg SUNGGUHAN dipakai,
+    apa pun isi .env-nya.
+    """
+    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_idcard')]
+
+    def get(self, request):
+        left, top, right, bottom = card_generator.CARD_LAYOUT['photo_box']
+        return Response({'width': right - left, 'height': bottom - top})
+
+
+class IDCardPhotoRetouchSaveView(APIView):
+    """
+    POST /api/v1/idcard/photo-retouch-save/
+    Body: {"pin": "982", "photo_data": "data:image/jpeg;base64,..."}
+
+    Simpan hasil retouch foto (crop/geser posisi, dikerjakan CLIENT-SIDE
+    lewat Canvas) KE folder photocrop di FTP -- SUPAYA bisa dipakai
+    ulang di pencarian foto berikutnya TANPA perlu crop ulang (lihat
+    photo_utils.py::save_photo_to_crop_folder utk detail lengkap kenapa
+    ini SATU-SATUNYA operasi TULIS ke FTP sumber). HANYA relevan utk
+    'karyawan'/'driver' (SAMA alasan dgn IDCardPhotoSearchView -- Visitor/
+    BHL TIDAK punya sumber foto FTP sama sekali).
+    """
+    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_idcard')]
+
+    def post(self, request):
+        pin = (request.data.get('pin') or '').lstrip('0')
+        photo_data = request.data.get('photo_data')
+        if not pin:
+            return Response({'error': "Field 'pin' wajib diisi."}, status=status.HTTP_400_BAD_REQUEST)
+        if not photo_data:
+            return Response({'error': "Field 'photo_data' wajib diisi."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            photo_bytes = _decode_data_uri(photo_data)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            filename = photo_utils.save_photo_to_crop_folder(pin, photo_bytes)
+        except photo_utils.PhotoFetchError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        return Response({'detail': 'Foto hasil retouch berhasil disimpan.', 'filename': filename})
+
+
 class IDCardGenerateView(APIView):
     """
     POST /api/v1/idcard/cards/generate/

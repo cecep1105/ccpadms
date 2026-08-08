@@ -6,9 +6,10 @@ resmi (error handling lebih baik, docstring, konfigurasi via settings/
 env, TIDAK ada perubahan LOGIC inti pencarian foto -- pemetaan
 source_key -> lokasi/folder FTP PERSIS SAMA dgn versi asli).
 
-Foto TIDAK diunggah baru lewat aplikasi ini -- HANYA dibaca dari server
-yang sudah ada (read-only, TIDAK PERNAH menulis/menghapus apa pun di
-FTP/database sumber).
+Foto pada MULANYA cuma dibaca dari server yang sudah ada (read-only) --
+SATU pengecualian: save_photo_to_crop_folder(), yang SENGAJA jadi
+pengecualian utk fitur retouch foto (crop/geser posisi) -- lihat
+docstring fungsi itu.
 """
 import base64
 import logging
@@ -155,8 +156,14 @@ def fetch_photos(pin, source_key='default'):
         directory = 'DRIVERKBA' if pin[:1] == '4' else ''
         return _fetch_from_ftp_dirs(settings.IDCARD_FTP3, [directory], pin, 'fallback')
 
-    # 'default' -- Karyawan umum
-    return _fetch_from_ftp_dirs(settings.IDCARD_FTP1, ['photo', 'photoinput', 'phototemp', 'photocrop'], pin, 'default')
+    # 'default' -- Karyawan umum. ⚠️ photocrop DITARUH PALING DEPAN
+    # (BUKAN urutan asli 'photo', 'photoinput', 'phototemp', 'photocrop')
+    # -- ini folder KHUSUS hasil retouch (lihat save_photo_to_crop_folder()
+    # di bawah), kalau PIN ini SUDAH PERNAH di-retouch sebelumnya, versi
+    # yang SUDAH diperbaiki itu HARUS muncul PALING DULU di daftar
+    # kandidat, supaya staf TIDAK perlu crop ulang dari foto mentah tiap
+    # kali generate kartu baru utk orang yang sama.
+    return _fetch_from_ftp_dirs(settings.IDCARD_FTP1, ['photocrop', 'photo', 'photoinput', 'phototemp'], pin, 'default')
 
 
 def fetch_photos_for_card_type(pin, card_type):
@@ -182,3 +189,43 @@ def fetch_photos_for_card_type(pin, card_type):
         results = fetch_photos(pin, 'fallback')
 
     return results
+
+
+def save_photo_to_crop_folder(pin, image_bytes):
+    """
+    Simpan hasil retouch foto (crop/geser posisi) KE folder photocrop
+    di IDCARD_FTP1 -- SATU-SATUNYA operasi TULIS ke FTP sumber di
+    SELURUH modul ini (kontras dgn seluruh fungsi lain di atas yang
+    read-only, lihat catatan panjang di docstring modul) -- fitur
+    retouch foto BUTUH ini supaya hasil crop/reposisi BISA DIPAKAI
+    ULANG nanti tanpa perlu crop ulang (fetch_photos() source_key=
+    'default' SUDAH diprioritaskan cari folder photocrop DULUAN drpd
+    folder lain, lihat perubahan urutan `dirs` di atas).
+
+    Nama file KONSISTEN per PIN (`{pin}_retouch.jpg`) -- retouch ULANG
+    utk PIN yang SAMA akan MENIMPA hasil retouch SEBELUMNYA (bukan
+    menumpuk banyak file lama yg tidak terpakai), sesuai ekspektasi
+    "1 foto final terkini per orang". PENTING: Storage.save() Django
+    BAWAAN TIDAK menimpa file yang sudah ada (nambah suffix random ke
+    nama file supaya "aman" dari tabrakan nama) -- kalau dibiarkan
+    APA ADANYA, retouch ke-2/ke-3/dst utk PIN yang SAMA akan menumpuk
+    jadi file BEDA-BEDA, BUKAN menimpa 1 file yang sama -- makanya file
+    lama DIHAPUS DULU secara eksplisit sebelum simpan yang baru.
+    """
+    if not settings.IDCARD_FTP1:
+        raise PhotoFetchError('IDCARD_FTP1 belum dikonfigurasi di server.')
+
+    from storages.backends.ftp import FTPStorage
+    from django.core.files.base import ContentFile
+
+    fs = FTPStorage(location=f'{settings.IDCARD_FTP1}photocrop/')
+    filename = f'{pin}_retouch.jpg'
+    try:
+        if fs.exists(filename):
+            fs.delete(filename)
+        fs.save(filename, ContentFile(image_bytes))
+    except Exception as exc:  # noqa: BLE001 -- ftplib/django-storages bisa lempar berbagai jenis exception koneksi/protokol
+        logger.warning('Gagal simpan foto retouch ke FTP utk PIN %s: %s', pin, exc)
+        raise PhotoFetchError(f'Gagal menyimpan foto ke FTP: {exc}') from exc
+
+    return filename
