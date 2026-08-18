@@ -149,6 +149,7 @@ def write_attlog_to_db(self, sn: str, pin: str, timestamp_iso: str, check_type: 
     attendance TIDAK HILANG cuma karena master data belum lengkap -- admin
     bisa lengkapi Nama/Pool-nya belakangan lewat dashboard.
     """
+    import re
     device = _get_device_or_none(sn)
     if device is None:
         return {'success': False, 'error': f"Device SN='{sn}' tidak ditemukan"}
@@ -171,9 +172,11 @@ def write_attlog_to_db(self, sn: str, pin: str, timestamp_iso: str, check_type: 
     if update_fields:
         emp.save(update_fields=update_fields)
 
+    _verify = re.sub(r"\D", "", verify)
+
     _trx, created = transaction.objects.get_or_create(
         UserID=emp, TTime=timestamp, SN=device,
-        defaults={'State': check_type, 'Verify': verify, 'Function': determine_transaction_function(pin, device)},
+        defaults={'State': check_type, 'Verify': _verify, 'Function': determine_transaction_function(pin, device)},
     )
     return {'success': True, 'created': created}
 

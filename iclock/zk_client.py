@@ -109,9 +109,9 @@ def fetch_device_logs(ip_address: str, port: int = ZK_DEFAULT_PORT, timeout: int
             'user_id': getattr(entry, 'user_id', None),
             'timestamp': timestamp.isoformat() if isinstance(timestamp, datetime) else None,
             'status': status_code,
-            'status_label': _attendance_label(ATTENDANCE_STATUS_LABEL, status_code),
+            'status_label': _attendance_label(ATTENDANCE_STATUS_LABEL, punch_code),
             'punch': punch_code,
-            'punch_label': _attendance_label(ATTENDANCE_PUNCH_LABEL, punch_code),
+            'punch_label': _attendance_label(ATTENDANCE_PUNCH_LABEL, status_code),
         })
     logs.sort(key=lambda r: r['timestamp'] or '', reverse=True)
     return logs

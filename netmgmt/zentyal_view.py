@@ -70,6 +70,13 @@ def _attr(entry: dict, name: str, default=''):
     return value
 
 
+def _alias_to_dict(entry: dict) -> dict:
+    return {
+        'uid': entry.get('uid','')[0],
+        'mail': entry.get('mail','')[0],
+        'maildrop': entry.get('maildrop','')
+    }
+
 def _user_to_dict(entry: dict) -> dict:
     # Zentyal/POSIX TIDAK PUNYA bit "account disabled" spt AD
     # (userAccountControl) -- konvensi Unix/LDAP standar (SAMA dgn
@@ -241,6 +248,68 @@ class ZentyalGroupMembershipView(APIView):
         message = 'User berhasil ditambahkan ke group.' if action == 'add' else 'User berhasil dihapus dari group.'
         return Response({'success': True, 'message': message}, status=status.HTTP_200_OK)
 
+
+class ZentyalPostfixAliasView(APIView):
+    """GET /api/v1/netmgmt/zentyal/postfix-alias/<str:alias>/?_page=&_limit=&_sort_by=&_order=&_q=&_search_fields= -- daftar postfix Zentyal."""
+    permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_zentyal_users')]
+
+    def get(self, request, alias):
+        try:
+            with _get_zentyal_client() as client:
+                rows = client.search(
+                    f'ou={LDAPManagementClient.escape(alias)},ou=postfix,{settings.ZENTYAL_BASE_DN}',
+                    '(&(objectClass=CourierMailAlias))',
+                    attributes=['uid', 'mail', 'maildrop'],
+                )
+        except LDAPManagementError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        aliases = [_alias_to_dict(row) for row in rows]
+        params = parse_list_params(request)
+        payload = paginate_sort_filter(aliases, **params)
+        return Response(payload, status=status.HTTP_200_OK)
+
+    def post(self, request, alias):
+        print(request.data)
+        mail = (request.data.get('mail') or '').strip()
+        maildrop = (request.data.get('maildrop') or '').strip()
+
+        if not mail:
+            return Response({'error': "'mail' wajib diisi."}, status=status.HTTP_400_BAD_REQUEST)
+        if not maildrop:
+            return Response({'error': "'maildrop' wajib diisi."}, status=status.HTTP_400_BAD_REQUEST)
+
+        alias_dn = f'mail={LDAPManagementClient.escape(mail)},ou={LDAPManagementClient.escape(alias)},ou=postfix,{settings.ZENTYAL_BASE_DN}'
+
+        try:
+            with _get_zentyal_client() as client:
+                attributes = {
+                    'uid': mail,
+                    'mail': mail,
+                    'maildrop': maildrop,
+                }
+                client.add_entry(alias_dn, ['account', 'CourierMailAlias'], attributes)
+        except LDAPManagementError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        return Response({'success': True, 'message': 'f{alias} berhasil dibuat.', 'mail': mail, 'maildrop': maildrop}, status=status.HTTP_201_CREATED)
+
+    def delete(self, request, alias):
+        mail = (request.data.get('mail') or '').strip()
+
+        if not mail:
+            return Response({'error': "'mail' wajib diisi."}, status=status.HTTP_400_BAD_REQUEST)
+
+        alias_dn = f'mail={LDAPManagementClient.escape(mail)},ou={LDAPManagementClient.escape(alias)},ou=postfix,{settings.ZENTYAL_BASE_DN}'
+
+        try:
+            with _get_zentyal_client() as client:
+                client.delete_entry(alias_dn)
+
+        except LDAPManagementError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        return Response({'success': True, 'message': f'{alias} untuk {mail} berhasil dihapus'}, status=status.HTTP_201_CREATED)
 
 class ZentyalResetPasswordView(APIView):
     """

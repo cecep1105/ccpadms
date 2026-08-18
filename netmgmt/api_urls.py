@@ -53,6 +53,7 @@ from .zentyal_view import (
     ZentyalUserCreateView,
     ZentyalUserDeleteView,
     ZentyalUserListView,
+    ZentyalPostfixAliasView,
     ZentyalUserToggleStatusView,
 )
 
@@ -112,6 +113,7 @@ urlpatterns = [
 
     # --- Zentyal LDAP (mail server) -- lihat netmgmt/zentyal_view.py ---
     path('zentyal/users/', ZentyalUserListView.as_view(), name='zentyal-users'),
+    path('zentyal/postfix-alias/<str:alias>/', ZentyalPostfixAliasView.as_view(), name='zentyal-postfix'),    
     path('zentyal/users/create/', ZentyalUserCreateView.as_view(), name='zentyal-user-create'),
     path('zentyal/users/toggle-status/', ZentyalUserToggleStatusView.as_view(), name='zentyal-user-toggle-status'),
     path('zentyal/users/delete/', ZentyalUserDeleteView.as_view(), name='zentyal-user-delete'),
