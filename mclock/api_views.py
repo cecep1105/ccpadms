@@ -14,7 +14,7 @@ from api.permissions import IsStaffRole
 
 from .models import MobilePool, MobilePoolLoc, PoolDeviceFunction
 from .serializers import MobilePoolLocSerializer, MobilePoolSerializer, PoolDeviceFunctionSerializer
-
+from .tasks import sync_mobile_pool_loc_task
 
 class BaseMclockViewSet(viewsets.ModelViewSet):
     """
@@ -125,3 +125,17 @@ class PoolDeviceFunctionViewSet(BaseMclockViewSet):
     queryset = PoolDeviceFunction.objects.all()
     serializer_class = PoolDeviceFunctionSerializer
     search_fields = ['PoolID']
+
+
+class SyncMobilePoolLocAPIView(APIView):
+    def post(self, request, *args, **kwargs):
+        task = sync_mobile_pool_loc_task.delay()
+
+        return Response(
+            {
+                "success": True,
+                "message": "Sinkronisasi Mobile Pool Location sedang diproses.",
+                "task_id": task.id,
+            },
+            status=status.HTTP_202_ACCEPTED,
+        )    

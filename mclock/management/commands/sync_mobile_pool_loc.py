@@ -23,8 +23,15 @@ MOBILE_POOL_LOC_SOURCE_SQL = (
     "SELECT PoolID, Urut, Latitude, Longitude FROM dbo.MsPool_Loc"
 )
 
+from mclock.services import (
+    sync_mobile_pool_loc_from_source,
+    MOBILE_POOL_LOC_SOURCE_SERVER,
+    MOBILE_POOL_LOC_SOURCE_DATABASE,
+    MOBILE_POOL_LOC_SOURCE_SQL,
+)
 
-def sync_mobile_pool_loc_from_source(server: str, database: str, sql: str, tds_version: str = None):
+
+def sync_mobile_pool_loc_from_source2(server: str, database: str, sql: str, tds_version: str = None):
     """
     Jalankan sinkronisasi SATU KALI dari MSSQL ke tabel MobilePoolLoc lokal
     -- dipisah dari `Command.handle()` supaya gampang dipanggil ulang (mis.

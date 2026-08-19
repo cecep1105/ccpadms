@@ -139,6 +139,17 @@ DATABASES = {
         'PASSWORD': env('DB_PASSWORD', default=''),
         'HOST': env('DB_HOST', default='127.0.0.1'),
         'PORT': env('DB_PORT', default='3306'),
+        'OPTIONS': {
+            # Increase timeout from 5 to 20 seconds so threads wait longer before crashing
+            'timeout': 20, 
+            # Force SQLite to use Write-Ahead Logging (WAL) mode
+            "init_command": (
+                "PRAGMA journal_mode=WAL;"
+                " PRAGMA synchronous=NORMAL;"
+                " PRAGMA busy_timeout=30000;"  # 30 seconds in milliseconds
+            ),
+
+        },
     }
 }
 if 'mysql' in DB_ENGINE:
