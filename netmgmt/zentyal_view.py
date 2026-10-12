@@ -99,6 +99,8 @@ def _user_to_dict(entry: dict) -> dict:
         'gid_number': _attr(entry, 'gidNumber'),
         'home_directory': _attr(entry, 'homeDirectory'),
         'is_enabled': is_enabled,
+        # 'shadowExpire': '1' if _attr(entry,'shadowExpire') == [] or _attr(entry,'shadowExpire') == 1 else '0'
+        'shadowExpire': '0' if _attr(entry,'shadowExpire') == '0' else "1" 
     }
 
 
@@ -130,17 +132,21 @@ class ZentyalUserListView(APIView):
     permission_classes = [IsAuthenticated, HasFeaturePermission('iclock.can_view_zentyal_users')]
 
     def get(self, request):
+        # filter = '(objectClass=posixAccount)'
+        filter = '(&(objectClass=posixAccount)(mail=*))'
+
         try:
             with _get_zentyal_client() as client:
                 rows = client.search(
                     settings.ZENTYAL_USER_BASE_DN,
-                    '(objectClass=posixAccount)',
-                    attributes=['uid', 'cn', 'displayName', 'mail', 'uidNumber', 'gidNumber', 'homeDirectory', 'userPassword'],
+                    filter,
+                    attributes=['uid', 'cn', 'displayName', 'mail', 'uidNumber', 'gidNumber', 'homeDirectory', 'userPassword','shadowExpire'],
                 )
         except LDAPManagementError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
-
+ 
         users = [_user_to_dict(row) for row in rows]
+       
         params = parse_list_params(request)
         payload = paginate_sort_filter(users, **params)
         return Response(payload, status=status.HTTP_200_OK)
@@ -491,11 +497,21 @@ class ZentyalUserToggleStatusView(APIView):
             with _get_zentyal_client() as client:
                 current_password = client.get_attribute(user_dn, 'userPassword')
                 current_password = str(current_password or '')
+                shadow_expire = client.get_attribute(user_dn, 'shadowExpire')
+                shadow_expire = str(shadow_expire or '')
+
                 if action == 'disable':
                     new_password = current_password if current_password.startswith('!') else f'!{current_password}'
+                    new_shadow_expire = '0'
+
+
                 else:
                     new_password = current_password[1:] if current_password.startswith('!') else current_password
+                    new_shadow_expire = '1'
+
                 client.replace_attribute(user_dn, 'userPassword', new_password)
+                client.replace_attribute(user_dn, 'shadowExpire', new_shadow_expire)
+
         except LDAPManagementError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 

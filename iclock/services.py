@@ -14,6 +14,8 @@ import re
 from django.db import transaction as db_transaction
 from django.utils import timezone
 
+from config import settings
+
 from .models import RegisteredDevice, employee, fptemp, iclock
 from .zk_client import DeviceConnectionError, fetch_device_users_and_templates
 
@@ -387,3 +389,54 @@ def has_attendance_recap_permission(user, recap_type: str) -> bool:
         return True
     perm = RECAP_TYPE_PERMISSION_MAP.get(recap_type, RECAP_TYPE_PERMISSION_MAP['all'])
     return user.has_perm(perm)
+
+
+def getemp_adms_prod(nik, name='',ext='', order=None):
+    from sqlalchemy import create_engine, text
+    engine = create_engine(settings.ADMSPROD_DBCONN)
+    employee_data = []
+
+    qry = "select e.*,d.Name AS DeviceName from absensi_employee AS e INNER JOIN absensi_iclock as d ON e.SN=d.SN"
+    filternik = f"(badgenumber*1) LIKE '{nik.strip()}%'"
+    filtername = f"e.name LIKE '%{name.strip()}%'"
+    filterext = f"e.ext LIKE '%{ext[1:].strip()}%'"
+    filterdate = f"DATE(Utime) = DATE_SUB(DATE(NOW()),INTERVAL 0 DAY)"
+
+    if not nik and not name:
+        pass
+    if ext:
+        qry=qry+ f" WHERE {filterext}"
+    elif not name and nik:
+        qry=qry+ f" WHERE {filternik}"
+    elif not nik and name:
+        if name[:1] == '?':
+            qry = qry + f" WHERE {filterext}"
+        else:
+            qry=qry+ f" WHERE {filtername}"
+    else:
+        qry = qry + f" WHERE {filtername} AND {filternik} AND {filterdate}"
+
+    if not order:
+        pass
+    else:
+        ascdesc =  'ASC' if order[:1] == '-' else 'DESC'
+        sortorder = order[1:] if order[:1] == '-' else order
+        qry = qry + f" ORDER BY {sortorder} {ascdesc}"
+
+    # print(qry)
+
+    with (engine.connect() as con):
+        result = con.execute(text(qry))
+        for row in result:
+            employee_data.append({
+                'userid': row.userid,
+                'badgenumber': row.badgenumber,
+                'name': row.name,
+                'ext': row.ext,
+                'Mobile': row.hp,
+                'AccGroup': row.AccGroup,
+                'UTime': row.UTime,
+                'SN': row.SN,
+                'DeviceName': row.DeviceName,
+            })
+    return employee_data

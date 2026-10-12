@@ -659,4 +659,7 @@ MIRROR_REQUEST_URL = env('MIRROR_REQUEST_URL', default='')  # mis. 'http://mirro
 SEND_ORIGINIP=env('ORIGINIP', default=False) # kalau True, IP asli pengirim request akan dikirim ke mirror via header X-Forwarded-For (untuk keperluan logging/traceability di server mirror)
 
 #--- Legacy iClock (DB lama) -- untuk keperluan migrasi data dari DB lama ke DB baru
-ICLOCK_LEGACY_DBCRED=env('ICLOCK_LEGACY_DBCRED', default='')  
+ADMSPROD_DBCONN=env('ADMSPROD_DBCONN', default='')  
+ADMSPROD_HOST=env('ADMSPROD_HOST', default='')
+ADMSPROD_USERNAME=env('ADMSPROD_USERNAME', default='')
+ADMSPROD_PASSWORD=env('ADMSPROD_PASSWORD', default='')

@@ -151,7 +151,7 @@ def _group_to_dict(entry: dict) -> dict:
     }
 
 
-def get_recently_locked_users(minutes: int = 2) -> list:
+def get_recently_locked_users(minutes: int = 500) -> list:
     """
     Query AD utk user yang TERKUNCI dalam N menit terakhir (default 2) --
     DIEKSTRAK jadi fungsi TERPISAH (SEBELUMNYA logic ini ada LANGSUNG di
@@ -176,7 +176,7 @@ def get_recently_locked_users(minutes: int = 2) -> list:
         rows = client.search(
             settings.AD_USER_BASE_DN,
             '(&(objectClass=user)(objectCategory=person)(lockoutTime>=%d))' % filetime_threshold,
-            attributes=['sAMAccountName', 'displayName', 'mail', 'userPrincipalName', 'userAccountControl', 'memberOf', 'lockoutTime'],
+            attributes=['cn','sAMAccountName', 'displayName', 'mail', 'userPrincipalName', 'userAccountControl', 'memberOf', 'lockoutTime'],
         )
     all_users = [_user_to_dict(row) for row in rows]
     return [u for u in all_users if u['is_locked']]

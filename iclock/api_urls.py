@@ -4,6 +4,7 @@ from rest_framework.routers import DefaultRouter
 from .api_views import (
     ActiveDeviceViewSet,
     AttendanceRecapAPIView,
+    AttendanceRecapAdmsProdAPIView,
     AttendanceRecapExportAPIView,
     AttendanceRecapEmployeeCardAPIView,
     MyAttendanceCardAPIView,
@@ -41,4 +42,7 @@ urlpatterns = [
     path('employee-search/', EmployeeSearchAPIView.as_view(), name='employee_search'),
     path('device-function-choices/', DeviceFunctionChoicesAPIView.as_view(), name='device_function_choices'),
     path('pool-device-choices/', PoolDeviceChoicesAPIView.as_view(), name='pool_device_choices'),
+    path('attendance-recap-adms-prod/', AttendanceRecapAdmsProdAPIView.as_view(), name='attendance_recap_adsm_prod'),
+
+
 ] + router.urls

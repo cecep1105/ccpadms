@@ -21,6 +21,6 @@ urlpatterns = [
     # --- Mobile Attendance (5 submenu, 1 API generik) -- lihat mclock/mobile_attendance_api_view.py ---
     path('mobile-attendance/sources/', MobileAttendanceSourceListView.as_view(), name='mobile-attendance-sources'),
     path('mobile-attendance/<str:slug>/', MobileAttendanceTableView.as_view(), name='mobile-attendance-table'),
-    path("sync/mobile-pool-loc/", SyncMobilePoolLocAPIView.as_view(),name="sync-mobile-pool-loc",),
+    path("sync-mobile-pool-loc/", SyncMobilePoolLocAPIView.as_view(),name="sync-mobile-pool-loc",),
 
 ] + router.urls

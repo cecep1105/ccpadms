@@ -37,7 +37,6 @@ class BaseMclockViewSet(viewsets.ModelViewSet):
             qs = qs.filter(q_obj)
         return qs
 
-
 class MobilePoolViewSet(BaseMclockViewSet):
     """
     CRUD Mobile Pool. PENTING: tabel ini disinkronkan dari MSSQL eksternal
@@ -128,6 +127,9 @@ class PoolDeviceFunctionViewSet(BaseMclockViewSet):
 
 
 class SyncMobilePoolLocAPIView(APIView):
+    """
+     POST /api/v1/mclock/sync-mobile-pool-loc/
+    """
     def post(self, request, *args, **kwargs):
         task = sync_mobile_pool_loc_task.delay()
 

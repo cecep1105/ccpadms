@@ -18,6 +18,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from api.permissions import HasFeaturePermission, IsStaffRole
+from iclock.ws_utils import wsinfo
 
 from .models import RegisteredDevice, department, devcmds, devlog, employee, fptemp, iclock, oplog, transaction
 from .serializers import (
@@ -39,7 +40,7 @@ from .serializers import (
     TransferFingerActionSerializer,
 )
 from . import services
-from .services import backup_device_fingerprints, maybe_activate_after_pool_change, normalize_pin
+from .services import backup_device_fingerprints, getemp_adms_prod, maybe_activate_after_pool_change, normalize_pin
 from .views import INDONESIAN_DAYS, _is_in_state, _to_local_time
 from .zk_client import (
     PRIVILEGE_ADMIN,
@@ -843,3 +844,421 @@ class MyAttendanceCardAPIView(APIView):
             'month': month,
             'rows': rows,
         })
+
+
+
+def convert_hhmm_to_minutes(time_str):
+    try:
+        hours_str, minutes_str = time_str.split(':')
+        hours = int(hours_str)
+        minutes = int(minutes_str)
+        total_minutes = (hours * 60) + minutes
+        return total_minutes
+    except ValueError:
+        print("Invalid time format. Please use HH:MM.")
+        return None
+
+class AttendanceRecapAdmsProdAPIView(APIView):
+    def post(self, request):
+        from django.core.paginator import Paginator
+        import pandas as pd
+        import paramiko
+        from django.core.cache import cache
+        from datetime import datetime
+        from django.utils import translation
+        from django.utils.formats import date_format
+        import json
+
+        postdata = request.data
+        pool = postdata.get('pool', None)
+        poolname = postdata.get('poolname','')
+        device = postdata.get('device', None)
+        function = postdata.get('fnc', None)
+        empgroup = postdata.get('empgroup', '')
+        perpage = postdata.get('perpage', 20)
+        page = postdata.get('page', 1)
+        format = postdata.get('format', 'table')
+        searchnik = postdata.get('searchtext', '')
+        timeid = postdata.get('timeid', '')
+
+        print(postdata)
+
+        if 'nikNames' in cache:
+            niknames = cache.get('nikNames')
+        else:
+            niknames = getemp_adms_prod('')
+            cache.set('nikNames', niknames)
+
+        kantindevs = []
+        try:
+            kantindevs = [ x['SN'] for x in iclock.objects.filter(Function='X').values('SN')]
+        except: pass
+
+        arrSN = []
+        if device:
+            arrSN.append(device)
+        elif pool:
+            arrSN = [x['SN'] for x in iclock.objects.filter(DeptID=pool).values('SN')]
+        else:
+            pass
+
+        files = [ "%s/masterlog/%s.txt" % (settings.BASE_DIR, d.strftime('%m%Y/%d'))  for d in pd.date_range(datetime.strftime(datetime.today().replace(day=1),'%Y/%m/%d'),datetime.strftime(datetime.today(),'%Y/%m/%d'))]
+        ftpfiles = []
+        smbfiles = []
+
+        try:
+            d1 = postdata.get('datefrom',datetime.now().strftime('%Y/%m/%d'))
+            d2 = postdata.get('dateto',datetime.now().strftime('%Y/%m/%d'))
+            if int(d1.replace('/', '')) < int(d2.replace('/', '')):
+                files = ["%s/data/masterlog/%s.txt" % (settings.BASE_DIR, d.strftime('%m%Y/%d'))  for d in pd.date_range(d1,d2)]
+                ftpfiles = ["%s/masterlog/%s.txt" % ('djangoapp/mysite', d.strftime('%m%Y/%d'))  for d in pd.date_range(d1,d2)]
+                smbfiles = ["data/masterlog/%s.txt" % (d.strftime('%m%Y/%d'))  for d in pd.date_range(d1,d2)]
+
+            else:
+                files = ["%s/data/masterlog/%s.txt" % (settings.BASE_DIR, d.strftime('%m%Y/%d'))  for d in pd.date_range(d2,d1)]
+                ftpfiles = ["%s/masterlog/%s.txt" % ('djangoapp/mysite', d.strftime('%m%Y/%d'))  for d in pd.date_range(d2,d1)]
+                smbfiles = ["data/masterlog/%s.txt" % (d.strftime('%m%Y/%d'))  for d in pd.date_range(d2,d1)]
+        except Exception as e:
+            pass
+
+
+        inoutdata = {}
+        _nikdata = []
+
+        opener = None
+        datasource = 'ftp'
+        sftp = None
+
+        ssh_client = paramiko.SSHClient()
+        ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh_client.connect(settings.ADMSPROD_HOST,username=settings.ADMSPROD_USERNAME,password=settings.ADMSPROD_PASSWORD)
+        sftp = ssh_client.open_sftp()
+        sftp.chdir('.')
+        remote_base_dir = sftp.getcwd()
+
+        for _ftpf in ftpfiles:
+            ftpf = f"{remote_base_dir}/{_ftpf}"
+            r = []
+            try:
+                with sftp.open(ftpf,'r') as r:
+                    for line in r:
+                        _SN, _NIK, _TTIME, _CTYPE = line.strip().split(',')
+                        if _NIK not in _nikdata:
+                            if function in 'X':
+                                if _SN in arrSN or (len(_SN) == 4 and _SN[-1] == 'M'):
+                                    if searchnik == '':
+                                        _nikdata.append(_NIK)
+                                    else:
+                                        if _NIK[:len(searchnik)] == searchnik:
+                                            _nikdata.append(_NIK)
+                            else:
+                                if searchnik == '':
+                                    _nikdata.append(_NIK)
+                                else:
+                                    if _NIK[:len(searchnik)] == searchnik:
+                                        _nikdata.append(_NIK)
+
+            except Exception as e:
+                print(e)
+
+        if empgroup:
+            folder = '%s/data/EMPGROUP' % settings.BASE_DIR
+            filename = "%s/%s.txt" % (folder, empgroup)
+            with open(filename, 'r') as f:
+                _nikdata  = [d.strip() for d in f.readlines() if d.strip() != '' ]
+
+        if function in settings.DEVICEFUNCTION.keys() and function != 'X':
+            _nikdata = list(filter(lambda x: x[:1] in function, _nikdata))
+
+        counter = int(perpage) * (int(page)-1) + 0
+
+        workbook = None
+        worksheet = None
+        y = 0
+        x = 0
+
+        if format == 'table':
+            paginator = Paginator(_nikdata, perpage)
+            if perpage >0:
+                _nikdata = paginator.page(page)
+        else:
+            import xlsxwriter
+            paginator = Paginator(_nikdata, len(_nikdata))
+            if perpage >0:
+                _nikdata = paginator.page(page)
+
+            workbook = xlsxwriter.Workbook("%s.xlsx" % 'inoutdata')
+            worksheet = workbook.add_worksheet()
+            cell_format1 = workbook.add_format({
+                'bold': True,
+                'font_color': 'blue',
+                'font_size': 12,
+                'text_wrap': True,
+                'valign': 'vcenter',
+                'align': 'center',
+                'border': 1,
+                'bg_color': 'yellow'
+            })
+            cell_format2 = workbook.add_format({
+                'bold': False,
+                'font_color': 'black',
+                'font_size': 12,
+                'text_wrap': True,
+                'valign': 'vcenter',
+                'align': 'center',
+                'border': 1,
+            })
+
+            y = 4
+            x = 1
+
+        rowdata = []
+        for nik in _nikdata:
+            totalperhari = []
+            data = []
+            dataabsen = []
+
+            sfiles = []
+            if datasource == 'ftp':
+                sfiles = ftpfiles
+            elif datasource == 'smb':
+                sfiles = smbfiles
+            else:
+                sfiles = files
+
+            for filename in sfiles:
+                _date = datetime.strptime(filename[-13:-4], "%m%Y/%d")
+                translation.activate('in')
+                datename = datetime.strftime(_date, '%d%m%Y')
+                dayname = "%s, %s" % (date_format(_date, 'l'), datetime.strftime(_date, '%d/%m/%Y'))
+                datatgl = []
+
+                try:
+                    f = [line.strip() for line in sftp.open(filename, 'r')]
+                    for line in f:
+                        datacheck = {}
+                        row = {}
+                        try:
+                            tgl = line.strip().split(',')[2].split()[0]
+                        except Exception as e:
+                            print(e)
+                            continue
+
+                        if str(int(nik)) in line.strip():
+                            SN, NIK, TTIME, CTYPE = line.strip().split(',')
+                            name = ''
+                            try: name = list(filter(lambda x: x['badgenumber'] == NIK.zfill(9) ,niknames))[0]['name']
+                            except Exception as e:
+                                pass
+
+                            row = {
+                                'id': counter,
+                                'device': 'dev',
+                                'nik': NIK,
+                                'name': name,
+                                'tdate': TTIME.split()[0],
+                                'ttime': TTIME.split()[1],
+                                'ctype': CTYPE
+                            }
+
+                            devname = SN
+                            try: devname = RegisteredDevice.objects.get(SN=SN).DeviceName
+                            except Exception as e:
+                                # print(e)
+                                pass
+
+                            datacheck = {
+                                'id': counter,
+                                'device': devname,
+                                'sn': SN,
+                                'nik': NIK,
+                                'name': name,
+                                'tdate': TTIME.split()[0],
+                                'ttime': TTIME.split()[1],
+                                'ctype': CTYPE
+                            }
+
+                            if function in 'X':
+                                if SN in arrSN:
+                                    datatgl.append(datacheck)
+                                    data.append(row)
+                            else:
+                                if SN in kantindevs:
+                                    continue
+                                datatgl.append(datacheck)
+                                data.append(row)
+
+                    dt = []
+                    dt_i = list(filter(lambda d: d['ctype'] == '0',datatgl))
+                    dt_o = list(filter(lambda d: d['ctype'] !='0',datatgl))
+                    try: dt.append(dt_i[0])
+                    except: pass
+                    try: dt.append(dt_o[-1])
+                    except: pass
+
+
+                    dataabsen.append({ 'tanggal': dayname, 'detail': dt if function=='X' else datatgl,  'detailfull': datatgl  })
+                except Exception as e:
+                    dataabsen.append({'tanggal': dayname, 'detail': [],  'detailfull': []  })
+                    # print(e)
+
+            info = {
+                'message': '%-4s/%-4d: %-9s' % (counter+1, len(_nikdata),nik),
+                'data': {'id': counter, 'total_record': paginator.count if format == 'table' else len(_nikdata),
+                         'total': len(_nikdata), 'progress': int(100 * (counter + 1) / len(_nikdata)), 'nik': nik,
+                         'inoutdata': { f"{nik}":  dataabsen }
+                        },
+                'target_id': 'progressbar'
+            }
+
+            _section = 'inout' if format=='table' else 'inoutxls'
+
+            absen_length = sum(len(d['detail']) for d in dataabsen)
+            if absen_length > 0:
+                wsinfo('iclock', _section, info)
+                inoutdata[nik] = dataabsen
+            else:
+                continue
+
+            if format == 'excel':
+                x = 1
+                worksheet.write(y, x-1, str(counter+1).zfill(3),workbook.add_format({'bold': False, 'font_color': 'black', 'valign': 'vcenter', 'align': 'center', 'border': 0}))
+                worksheet.write(y, x, nik,workbook.add_format({'bold': False, 'font_color': 'black', 'font_size': 14, 'valign': 'vcenter', 'align': 'center', 'border': 1}))
+                name = ''
+                try: name = list(filter(lambda x: x['badgenumber'] == nik.zfill(9), niknames))[0]['name']
+                except: pass
+                x = 2
+                worksheet.write(y, x, name,workbook.add_format({'bold': False, 'font_color': 'black', 'font_size': 14, 'valign': 'vcenter', 'align': 'left', 'border': 1}))
+                worksheet.write(3, 2, 'NAMA', workbook.add_format({'bold': True, 'font_color': 'black', 'font_size': 16, 'valign': 'vcenter', 'align': 'center', 'border': 1}))
+                worksheet.write(3, 1, 'NIK', workbook.add_format({'bold': True, 'font_color': 'black', 'font_size': 16, 'valign': 'vcenter', 'align': 'center', 'border': 1}))
+                emptydate=0
+                daycount = []
+                for dt in dataabsen:
+                    dc=0
+                    if(len(dt['detail'])) > 0:
+                        emptydate = emptydate + 1
+                    header = '\n'.join(dt['tanggal'].split(', '))
+                    celldata = '\n'.join(["%s|%s|%s" % (v['ttime'], v['ctype'],v['device']) for v in dt['detail']])
+                    if function == 'X':
+                        arrTime = celldata.split('\n')
+                        if len(arrTime) > 1:
+                            arrTimeInMinutes = [{ 't1': a, 't2': convert_hhmm_to_minutes(a.split('|')[0])} for a in arrTime]
+                            min_time_dict = min(arrTimeInMinutes, key=lambda d: d["t2"])
+                            max_time_dict = max(arrTimeInMinutes, key=lambda d: d["t2"])
+                            timediff = (max_time_dict['t2'] - min_time_dict['t2'])
+                            if timediff > 3*60:
+                                mindata = min_time_dict['t1']
+                                maxdata = max_time_dict['t1']
+
+                                celldata = '\n'.join([mindata,maxdata])
+                                dc=2
+                            else:
+                                celldata = max_time_dict['t1']
+                                dc=1
+                        else:
+                            dc=1 if celldata else 0
+
+                    if y==4:
+                        worksheet.write(y-1, x + 1, header, cell_format1)
+                        worksheet.set_column(y-1, x + 1, 12)
+                    if x==1:
+                        cellf = cell_format1.set_align('vcenter')
+                        worksheet.write(y, x - 1, counter+1, cellf)
+
+                    if dc>1:
+                        worksheet.write(y, x + 1, celldata, cell_format1)
+                    else:
+                        worksheet.write(y, x + 1, celldata, cell_format2)
+                    daycount.append(dc)
+                    x = x + 1
+
+                if function == 'X':
+                    if y==4:
+                        worksheet.write(y-1, x + 1, 'JUMLAH', workbook.add_format({'bold': True, 'font_color': 'black', 'font_size': 12, 'valign': 'vcenter', 'align': 'center', 'border': 1}))
+                    # cetak total per NIK (yg makan lebih dari 1x dianggap 1)
+                    worksheet.write_formula(y, x + 1, '=COUNTA(%s%s..%s%s)' % (chr(68), y + 1, chr(68 + len(dataabsen) - 1), y + 1), cell_format1)
+
+                if emptydate > 0:
+                    y += 1
+                    rowdata.append(daycount)
+                else:
+                    counter = counter-1
+                    nx = 0
+                    for dt in dataabsen:
+                        worksheet.write(y, nx + 1, '', cell_format2)
+            counter += 1
+        columns = ['id', 'device', 'nik', 'tdate', 'ttime', 'ctype']
+
+        totalperhari=0
+        if len(rowdata)>0:
+            for n in range(0, len(dataabsen)):
+                sumdt = 0
+                for m in rowdata:
+                    sumdt += m[n]
+
+                totalperhari.append(sumdt)
+
+
+        if format == 'excel':
+            import os
+            from django.http import FileResponse
+            worksheet.autofit()
+
+            if function == 'X':
+                merge_format = workbook.add_format({
+                    'bold': 1,
+                    'font_size': 16,
+                    'border': 0,
+                    'align': 'center',
+                    'valign': 'vcenter',
+                    'fg_color': 'green',
+                })
+                worksheet.merge_range(0,1,0,len(dataabsen)+3,'title1',merge_format)
+                worksheet.merge_range(1,1,1,len(dataabsen)+3,'title2',merge_format)
+                worksheet.write(0, 1, 'DATA ABSENSI KANTIN: %s to %s' % (postdata['datefrom'],postdata['dateto']), merge_format)
+                worksheet.write(1, 1, poolname, merge_format)
+                worksheet.write(y, 0, '', workbook.add_format({'bold': False, 'font_color': 'black', 'valign': 'vtop', 'align': 'left', 'border': 0}))
+                worksheet.write(y, 1, '', workbook.add_format({'bold': False, 'font_color': 'black', 'valign': 'vtop', 'align': 'left', 'border': 0}))
+                worksheet.write(y, 2, 'JUMLAH', workbook.add_format({'bold': True, 'font_color': 'black', 'font_size': 16, 'valign': 'vcenter', 'align': 'center', 'border': 0}))
+
+
+                #cetak total per NIK termasuk lebih dari 1x makan
+                for i,v in enumerate(rowdata):
+                    worksheet.write(i+4,len(dataabsen)+4,sum(v),cell_format2)
+
+                for n in range(0,len(dataabsen)):
+                    sumdt = 0
+                    for m in rowdata:
+                        sumdt += m[n]
+
+                    totalperhari.append(sumdt)
+
+                    # cetak total per day (yg makan lebih dari 1x dianggap 1)
+                    worksheet.write_formula(y,n+3,'=COUNTA(%s5..%s%s)' %(chr(68+n),chr(68+n), y), cell_format1)
+
+                    # cetak total per day termasuk lebih dari 1x makan
+                    worksheet.write(y+1, n + 3, sumdt, cell_format2)
+
+                worksheet.write_formula(y, len(dataabsen) + 3, '=SUM(D%s..%s%s)' % (y+1, chr(68 + len(dataabsen)-1),y+1), merge_format)
+                worksheet.write_formula(y+1, len(dataabsen) + 4, '=SUM(D%s..%s%s)' % (y+2, chr(68 + len(dataabsen)-1),y+2), merge_format)
+                worksheet.freeze_panes(4, 0)
+            worksheet.set_column(1, 1, 14)
+            workbook.close()
+
+            file_name = 'inoutdata.xlsx'
+            path_to_file = os.path.realpath(file_name)
+            response = FileResponse(open(path_to_file, 'rb'))
+            response['Content-Disposition'] = 'inline; filename=' + file_name
+            return response
+
+        resp = json.dumps({
+            'total_record': paginator.count,
+            'total_page': paginator.num_pages,
+            'data': inoutdata,
+            'sumdata': totalperhari,
+            'params': postdata,
+            'current_page': page
+        })
+        return HttpResponse(resp, 'application/json')
+
+        
